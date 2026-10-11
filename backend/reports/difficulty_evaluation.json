@@ -1,0 +1,66 @@
+{
+  "task": "Difficulty Classification",
+  "test_size": 14743,
+  "train_size": 58969,
+  "classes": [
+    "Easy",
+    "Medium",
+    "Hard"
+  ],
+  "accuracy": 1.0,
+  "macro_precision": 1.0,
+  "macro_recall": 1.0,
+  "macro_f1": 1.0,
+  "weighted_f1": 1.0,
+  "baseline_comparison": {
+    "strategy": "most_frequent",
+    "baseline_accuracy": 0.4023,
+    "baseline_macro_f1": 0.1913
+  },
+  "per_class": {
+    "Easy": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 4968
+    },
+    "Medium": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 5931
+    },
+    "Hard": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 3844
+    }
+  },
+  "confusion_matrix": {
+    "labels": [
+      "Easy",
+      "Medium",
+      "Hard"
+    ],
+    "matrix": [
+      [
+        4968,
+        0,
+        0
+      ],
+      [
+        0,
+        5931,
+        0
+      ],
+      [
+        0,
+        0,
+        3844
+      ]
+    ]
+  },
+  "generalization_warning": "Notice: Evaluation was performed on an 80/20 held-out split of the provided question bank. However, synthetic or repeated syntactic question templates within the dataset may cause lexical overlap between train and test splits, artificially elevating held-out scores. This metric demonstrates pipeline convergence on this corpus, not guaranteed out-of-domain real-world generalization across unseen boards or question styles.",
+  "training_duration_seconds": 2.73
+}

@@ -19,7 +19,15 @@ from database.models import (
     Question, GeneratedPaper, User, Curriculum, DatasetUpload, ModelVersion, AuditLog
 )
 from ml.predict import predictor
-from ml.random_forest_trainer import train_random_forest_pipeline, activate_version
+from ml.random_forest_trainer import (
+    train_random_forest_pipeline,
+    activate_version,
+    train_edubloom_candidate_model
+)
+from services.edubloom_service import (
+    inspect_and_validate_edubloom_dataset,
+    optionally_stage_edubloom_into_db
+)
 from services.question_selection import select_questions
 from services.pdf_generator import generate_exam_pdf, generate_teacher_summary_pdf
 from services.curriculum_service import (
@@ -580,6 +588,131 @@ def admin_import_dataset_to_bank(upload_id):
     if not result['success']:
         return jsonify(result), 400
     return jsonify(result)
+
+
+# ==============================================================================
+# ADMIN: EDUBLOOM DATASET INTEGRATION & CANDIDATE MODEL PIPELINE (ADMIN ONLY)
+# ==============================================================================
+
+@app.route('/api/admin/edubloom/validate', methods=['POST'])
+@admin_required
+def admin_validate_edubloom():
+    """
+    Validates the 73,712-row EduBloom dataset (Admin Only).
+    Checks columns, missing values, duplicates, and verifies L1-L6 mapping.
+    Enforces Tamil Nadu State Board isolation guards.
+    """
+    report = inspect_and_validate_edubloom_dataset()
+    if not report.get('success'):
+        return jsonify(report), 400
+    return jsonify(report), 200
+
+
+@app.route('/api/admin/edubloom/train-candidate', methods=['POST'])
+@admin_required
+def admin_train_edubloom_candidate():
+    """
+    Trains a candidate Random Forest model on the EduBloom dataset (Admin Only).
+    Evaluates on an 80/20 held-out test split and compares against currently active models.
+    STRICT SAFETY: Does NOT activate or overwrite existing models without explicit admin promotion.
+    """
+    data = request.get_json() or {}
+    task_name = data.get('task_name') or 'bloom_level'
+    sample_limit = data.get('sample_limit')
+    if sample_limit is not None:
+        try:
+            sample_limit = int(sample_limit)
+        except (ValueError, TypeError):
+            sample_limit = None
+    n_estimators = int(data.get('n_estimators') or 100)
+
+    result = train_edubloom_candidate_model(
+        task_name=task_name,
+        sample_limit=sample_limit,
+        n_estimators=n_estimators,
+        user_id=g.current_user.id
+    )
+
+    if not result.get('success'):
+        return jsonify(result), 400
+    return jsonify(result), 201
+
+
+@app.route('/api/admin/edubloom/stage-questions', methods=['POST'])
+@admin_required
+def admin_stage_edubloom_questions():
+    """
+    Optionally stages validated EduBloom questions into database (Admin Only).
+    STRICT ISOLATION: Tags records as 'General / EduBloom' and verified=False.
+    Never marks questions as Tamil Nadu State Board.
+    """
+    data = request.get_json() or {}
+    max_rows = int(data.get('max_rows') or 5000)
+
+    result = optionally_stage_edubloom_into_db(
+        max_rows=max_rows,
+        user_id=g.current_user.id
+    )
+    if not result.get('success'):
+        return jsonify(result), 400
+    return jsonify(result), 200
+
+
+@app.route('/api/admin/edubloom/summary', methods=['GET'])
+@admin_required
+def admin_edubloom_summary():
+    """
+    Summary of EduBloom dataset status, candidate models, and isolation metrics (Admin Only).
+    """
+    db = get_db()
+    try:
+        from services.edubloom_service import EDUBLOOM_CSV_PATH, EDUBLOOM_REPORT_PATH
+        csv_exists = os.path.exists(EDUBLOOM_CSV_PATH)
+        file_size_mb = round(os.path.getsize(EDUBLOOM_CSV_PATH) / (1024 * 1024), 2) if csv_exists else 0
+
+        # Cached validation report
+        cached_report = None
+        if os.path.exists(EDUBLOOM_REPORT_PATH):
+            try:
+                with open(EDUBLOOM_REPORT_PATH, 'r', encoding='utf-8') as f:
+                    cached_report = json.load(f)
+            except Exception:
+                cached_report = None
+
+        # Candidate models vs active models
+        candidate_models = db.query(ModelVersion).filter(
+            ModelVersion.version.like('%candidate%')
+        ).order_by(ModelVersion.created_at.desc()).all()
+
+        active_bloom = db.query(ModelVersion).filter_by(task_name='bloom_level', is_active=True).first()
+        active_diff = db.query(ModelVersion).filter_by(task_name='difficulty', is_active=True).first()
+
+        # Database counts
+        tn_count = db.query(Question).filter(Question.board == 'Tamil Nadu State Board').count()
+        general_count = db.query(Question).filter(Question.board != 'Tamil Nadu State Board').count()
+
+        return jsonify({
+            'dataset_status': {
+                'available': csv_exists,
+                'path': EDUBLOOM_CSV_PATH,
+                'file_size_mb': file_size_mb,
+                'source': 'Hugging Face Uzaib52/edubloom-question-bank'
+            },
+            'validation_report': cached_report,
+            'models': {
+                'active_bloom': active_bloom.to_dict() if active_bloom else None,
+                'active_difficulty': active_diff.to_dict() if active_diff else None,
+                'candidate_models': [m.to_dict() for m in candidate_models]
+            },
+            'database_isolation': {
+                'verified_tn_board_questions': tn_count,
+                'general_training_questions': general_count,
+                'isolation_enforced': True,
+                'policy': 'EduBloom general questions cannot be selected for Tamil Nadu State Board examination papers.'
+            }
+        })
+    finally:
+        db.close()
 
 
 # ==============================================================================

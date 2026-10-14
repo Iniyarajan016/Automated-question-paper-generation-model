@@ -10,12 +10,12 @@
   ],
   "train_samples": 895,
   "test_samples": 224,
-  "train_accuracy": 0.9978,
-  "test_accuracy": 0.942,
-  "macro_precision": 0.7929,
-  "macro_recall": 0.7913,
-  "macro_f1": 0.7901,
-  "weighted_f1": 0.9411,
+  "train_accuracy": 0.9944,
+  "test_accuracy": 0.9464,
+  "macro_precision": 0.7976,
+  "macro_recall": 0.7951,
+  "macro_f1": 0.7936,
+  "weighted_f1": 0.9466,
   "baseline": {
     "accuracy": 0.2768,
     "macro_f1": 0.0723,
@@ -23,15 +23,15 @@
   },
   "per_class": {
     "Analyze": {
-      "precision": 0.9661,
+      "precision": 1.0,
       "recall": 0.9194,
-      "f1_score": 0.9421,
+      "f1_score": 0.958,
       "support": 62
     },
     "Apply": {
-      "precision": 0.9762,
-      "recall": 0.9318,
-      "f1_score": 0.9535,
+      "precision": 1.0,
+      "recall": 0.9545,
+      "f1_score": 0.9767,
       "support": 44
     },
     "Create": {
@@ -53,9 +53,9 @@
       "support": 30
     },
     "Understand": {
-      "precision": 0.8148,
+      "precision": 0.7857,
       "recall": 1.0,
-      "f1_score": 0.898,
+      "f1_score": 0.88,
       "support": 44
     }
   },
@@ -78,12 +78,12 @@
         5
       ],
       [
-        2,
-        41,
+        0,
+        42,
         0,
         0,
         0,
-        1
+        2
       ],
       [
         0,
@@ -95,11 +95,11 @@
       ],
       [
         0,
-        1,
+        0,
         0,
         40,
         0,
-        2
+        3
       ],
       [
         0,

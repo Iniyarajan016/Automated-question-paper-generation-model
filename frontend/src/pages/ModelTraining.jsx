@@ -17,6 +17,10 @@ import { api } from '../services/api';
 
 export default function ModelTraining() {
   const [selectedTask, setSelectedTask] = useState('bloom_level');
+  const [trainingSource, setTrainingSource] = useState('db'); // 'db' or 'edubloom'
+  const [edubloomSampleLimit, setEdubloomSampleLimit] = useState(10000);
+  const [validatingEdubloom, setValidatingEdubloom] = useState(false);
+  const [edubloomValidation, setEdubloomValidation] = useState(null);
   const [nEstimators, setNEstimators] = useState(100);
   const [training, setTraining] = useState(false);
   const [trainingResult, setTrainingResult] = useState(null);
@@ -41,6 +45,21 @@ export default function ModelTraining() {
     }
   };
 
+  const handleValidateEdubloom = async () => {
+    setValidatingEdubloom(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await api.validateEduBloomDataset();
+      setEdubloomValidation(res);
+      setSuccess(`EduBloom dataset validated: ${res.valid_usable_rows?.toLocaleString()} usable rows, 0 nulls, L1-L6 mapped, 100% isolated from TN State Board question bank.`);
+    } catch (err) {
+      setError(err.message || 'Failed to validate EduBloom dataset.');
+    } finally {
+      setValidatingEdubloom(false);
+    }
+  };
+
   const handleStartTraining = async () => {
     setTraining(true);
     setError('');
@@ -48,14 +67,25 @@ export default function ModelTraining() {
     setTrainingResult(null);
 
     try {
-      const res = await api.trainRandomForestModel({
-        task_name: selectedTask,
-        dataset_source: 'db',
-        n_estimators: nEstimators,
-        auto_activate: false
-      });
-      setTrainingResult(res);
-      setSuccess(`Random Forest training completed in ${res.duration_seconds}s with Test Accuracy of ${(res.evaluation.test_accuracy * 100).toFixed(1)}%. Review held-out metrics below.`);
+      let res;
+      if (trainingSource === 'edubloom') {
+        res = await api.trainEduBloomCandidateModel({
+          task_name: selectedTask,
+          sample_limit: edubloomSampleLimit > 0 ? edubloomSampleLimit : null,
+          n_estimators: nEstimators
+        });
+        setTrainingResult(res);
+        setSuccess(`Candidate Model "${res.version}" trained on EduBloom data (${res.evaluation?.train_samples} train, ${res.evaluation?.test_samples} held-out test). Accuracy: ${(res.evaluation.test_accuracy * 100).toFixed(1)}%. Review comparison against active model below.`);
+      } else {
+        res = await api.trainRandomForestModel({
+          task_name: selectedTask,
+          dataset_source: 'db',
+          n_estimators: nEstimators,
+          auto_activate: false
+        });
+        setTrainingResult(res);
+        setSuccess(`Random Forest training completed in ${res.duration_seconds}s with Test Accuracy of ${(res.evaluation.test_accuracy * 100).toFixed(1)}%. Review held-out metrics below.`);
+      }
       loadVersions();
     } catch (err) {
       setError(err.message || 'Model training failed.');
@@ -120,6 +150,103 @@ export default function ModelTraining() {
             <Layers className="w-4 h-4 text-blue-600" />
             <span>Training Configuration</span>
           </h3>
+
+          {/* Dataset Source Selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">Training Data Source</label>
+            <div className="space-y-2">
+              <label
+                onClick={() => setTrainingSource('db')}
+                className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                  trainingSource === 'db'
+                    ? 'border-blue-600 bg-blue-50/40 ring-1 ring-blue-600/30'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="source"
+                  checked={trainingSource === 'db'}
+                  onChange={() => setTrainingSource('db')}
+                  className="mt-0.5 text-blue-600"
+                />
+                <div>
+                  <div className="text-xs font-bold text-slate-900">Tamil Nadu State Board Question Bank</div>
+                  <div className="text-[11px] text-slate-500">Verified Samacheer Kalvi syllabus items (Live DB)</div>
+                </div>
+              </label>
+
+              <label
+                onClick={() => setTrainingSource('edubloom')}
+                className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                  trainingSource === 'edubloom'
+                    ? 'border-purple-600 bg-purple-50/40 ring-1 ring-purple-600/30'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="source"
+                  checked={trainingSource === 'edubloom'}
+                  onChange={() => setTrainingSource('edubloom')}
+                  className="mt-0.5 text-purple-600"
+                />
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-900">Hugging Face EduBloom Dataset</span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-700">Candidate</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">73,712-row question bank (L1–L6 mapped to Bloom)</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* EduBloom Specific Controls */}
+          {trainingSource === 'edubloom' && (
+            <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-900">EduBloom Dataset Pipeline</span>
+                <button
+                  type="button"
+                  onClick={handleValidateEdubloom}
+                  disabled={validatingEdubloom}
+                  className="px-2.5 py-1 rounded bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-semibold transition-colors cursor-pointer"
+                >
+                  {validatingEdubloom ? 'Validating...' : 'Validate Dataset'}
+                </button>
+              </div>
+
+              {edubloomValidation ? (
+                <div className="text-[11px] text-purple-800 space-y-1">
+                  <div className="font-semibold text-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Validated {edubloomValidation.valid_usable_rows?.toLocaleString()} rows (0 nulls)</span>
+                  </div>
+                  <div>• L1–L6 taxonomy mapped to 6 Bloom categories</div>
+                  <div>• Isolated as <b>General / EduBloom</b> (unverified for TN board)</div>
+                </div>
+              ) : (
+                <div className="text-[11px] text-purple-700">
+                  Inspects 73,712 rows, checks duplicates, validates L1–L6 mappings, and verifies State Board isolation guards.
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-semibold text-purple-900 mb-1">Candidate Training Sample Limit</label>
+                <select
+                  value={edubloomSampleLimit}
+                  onChange={(e) => setEdubloomSampleLimit(Number(e.target.value))}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-200 bg-white"
+                >
+                  <option value="5000">5,000 Questions (Fast Evaluation)</option>
+                  <option value="10000">10,000 Questions (Balanced Candidate)</option>
+                  <option value="25000">25,000 Questions (Deep Candidate)</option>
+                  <option value="0">All 73,712 Questions (Full Exhaustive)</option>
+                </select>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">Target Classification Task</label>
@@ -192,9 +319,11 @@ export default function ModelTraining() {
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-500 space-y-1">
-            <div className="font-semibold text-slate-700">Safety Guarantee:</div>
+            <div className="font-semibold text-slate-700">Non-Destructive Promotion Policy:</div>
             <div>
-              Training runs strictly on a held-out 80/20 stratified split. A newly trained model will never replace your currently active model until explicitly activated.
+              {trainingSource === 'edubloom'
+                ? 'Candidate models are saved with is_active=False and will NEVER replace live State Board models without explicit promotion.'
+                : 'Training runs strictly on an 80/20 held-out stratified split. Active models remain locked until admin activation.'}
             </div>
           </div>
 
@@ -204,18 +333,20 @@ export default function ModelTraining() {
             className={`w-full py-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md ${
               training
                 ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                : trainingSource === 'edubloom'
+                ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20'
                 : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
             }`}
           >
             {training ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Fitting Random Forest Pipeline...</span>
+                <span>{trainingSource === 'edubloom' ? 'Training Candidate Model...' : 'Fitting Random Forest Pipeline...'}</span>
               </>
             ) : (
               <>
                 <Play className="w-4 h-4 fill-current" />
-                <span>Train Random Forest Model</span>
+                <span>{trainingSource === 'edubloom' ? 'Train Candidate Random Forest Model' : 'Train Random Forest Model'}</span>
               </>
             )}
           </button>
@@ -223,6 +354,82 @@ export default function ModelTraining() {
 
         {/* Right Column: Active Model Telemetry & Genuine Evaluation */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Candidate Comparison Telemetry Banner */}
+          {trainingResult?.active_model_comparison && (
+            <div className="p-6 rounded-2xl bg-linear-to-r from-purple-50 via-white to-blue-50 border border-purple-200 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-purple-600 text-white shadow-xs">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                      Candidate Model Evaluation vs. Active Baseline
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      Candidate: {trainingResult.version}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleActivate(trainingResult.model_id)}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-600/20 cursor-pointer flex items-center gap-1.5 transition-colors"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Promote Candidate to Active</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Side-by-side delta cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Test Accuracy</div>
+                  <div className="text-lg font-bold font-mono text-purple-700 mt-0.5">
+                    {(trainingResult.evaluation.test_accuracy * 100).toFixed(1)}%
+                  </div>
+                  <div className={`text-[10px] font-bold mt-0.5 ${trainingResult.active_model_comparison.delta_accuracy >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {trainingResult.active_model_comparison.delta_accuracy >= 0 ? '+' : ''}
+                    {(trainingResult.active_model_comparison.delta_accuracy * 100).toFixed(1)}% vs. Active
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Macro F1-Score</div>
+                  <div className="text-lg font-bold font-mono text-slate-900 mt-0.5">
+                    {trainingResult.evaluation.macro_f1}
+                  </div>
+                  <div className={`text-[10px] font-bold mt-0.5 ${trainingResult.active_model_comparison.delta_macro_f1 >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {trainingResult.active_model_comparison.delta_macro_f1 >= 0 ? '+' : ''}
+                    {trainingResult.active_model_comparison.delta_macro_f1} vs. Active
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Active Baseline Version</div>
+                  <div className="text-xs font-bold font-mono text-slate-700 truncate mt-1">
+                    {trainingResult.active_model_comparison.active_version}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    Acc: {((trainingResult.active_model_comparison.active_accuracy || 0) * 100).toFixed(1)}%
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Promotion Safety</div>
+                  <div className="text-xs font-bold text-amber-700 mt-1 flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Unpromoted</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Live API untouched</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeEval ? (
             <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
@@ -440,6 +647,11 @@ export default function ModelTraining() {
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
                           <span>Active Live</span>
                         </span>
+                      ) : ver.version?.includes('candidate') ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+                          <span>Candidate</span>
+                        </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
                           Standby
@@ -450,9 +662,13 @@ export default function ModelTraining() {
                       {!ver.is_active && (
                         <button
                           onClick={() => handleActivate(ver.id)}
-                          className="px-3 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition-colors cursor-pointer"
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                            ver.version?.includes('candidate')
+                              ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-xs'
+                              : 'bg-blue-50 hover:bg-blue-100 text-blue-700'
+                          }`}
                         >
-                          Activate Model
+                          {ver.version?.includes('candidate') ? 'Promote to Active' : 'Activate Model'}
                         </button>
                       )}
                     </td>

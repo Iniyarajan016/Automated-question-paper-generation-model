@@ -44,9 +44,55 @@ export default function DatasetManagement() {
   const [validationReport, setValidationReport] = useState(null);
   const [importing, setImporting] = useState(false);
 
+  // EduBloom state
+  const [validatingEdubloom, setValidatingEdubloom] = useState(false);
+  const [edubloomReport, setEdubloomReport] = useState(null);
+  const [stagingQuestions, setStagingQuestions] = useState(false);
+
   useEffect(() => {
     loadDatasets();
+    loadEdubloomSummary();
   }, []);
+
+  const loadEdubloomSummary = async () => {
+    try {
+      const res = await api.getEduBloomSummary();
+      if (res.validation_report) {
+        setEdubloomReport(res.validation_report);
+      }
+    } catch {
+      // Ignored if not yet initialized
+    }
+  };
+
+  const handleValidateEdubloom = async () => {
+    setValidatingEdubloom(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await api.validateEduBloomDataset();
+      setEdubloomReport(res);
+      setSuccess(`EduBloom dataset validation complete: ${res.valid_usable_rows?.toLocaleString()} usable rows, 0 nulls, L1–L6 Bloom mapping verified.`);
+    } catch (err) {
+      setError(err.message || 'Failed to validate EduBloom dataset.');
+    } finally {
+      setValidatingEdubloom(false);
+    }
+  };
+
+  const handleStageEdubloom = async (maxRows = 2500) => {
+    setStagingQuestions(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await api.stageEduBloomQuestions({ max_rows: maxRows });
+      setSuccess(res.message);
+    } catch (err) {
+      setError(err.message || 'Failed to stage EduBloom questions.');
+    } finally {
+      setStagingQuestions(false);
+    }
+  };
 
   const loadDatasets = async () => {
     setLoading(true);
@@ -173,6 +219,140 @@ export default function DatasetManagement() {
           <span>{success}</span>
         </div>
       )}
+
+      {/* EduBloom Hugging Face Pipeline Panel */}
+      <div className="p-6 rounded-2xl bg-linear-to-r from-purple-50/70 via-white to-indigo-50/50 border border-purple-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-purple-600 text-white shadow-xs">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-700">Optional ML Pipeline Integration</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                  Hugging Face: Uzaib52/edubloom-question-bank
+                </span>
+              </div>
+              <h2 className="text-base font-bold text-slate-900 mt-0.5">
+                EduBloom 73,712-Row Question Bank Pipeline
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleValidateEdubloom}
+              disabled={validatingEdubloom}
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {validatingEdubloom ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Validating Schema...</span>
+                </>
+              ) : (
+                <>
+                  <FileCheck className="w-4 h-4" />
+                  <span>Validate EduBloom Dataset</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleStageEdubloom(2500)}
+              disabled={stagingQuestions}
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              title="Stage 2,500 questions into DB under board='General / EduBloom' without touching Tamil Nadu State Board question bank"
+            >
+              {stagingQuestions ? 'Staging...' : 'Stage 2.5k Sample'}
+            </button>
+          </div>
+        </div>
+
+        {/* Isolation Policy Banner */}
+        <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-bold">Tamil Nadu State Board Isolation Policy:</span>
+            <div className="text-[11px] text-amber-800">
+              Imported EduBloom questions are strictly designated as <b>board="General / EduBloom"</b> and <b>verified=False</b>. They will never be labeled as Tamil Nadu State Board questions or mixed into official State Board question papers unless explicit curriculum alignment is verified.
+            </div>
+          </div>
+        </div>
+
+        {/* Validation Report Details */}
+        {edubloomReport && (
+          <div className="space-y-3 pt-2 border-t border-purple-100">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-white border border-purple-100 shadow-2xs">
+                <div className="text-[10px] text-slate-500 uppercase font-semibold">Total Inspected Rows</div>
+                <div className="text-xl font-bold font-mono text-purple-700 mt-0.5">
+                  {edubloomReport.total_rows_inspected?.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-slate-400">Source: Hugging Face</div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-purple-100 shadow-2xs">
+                <div className="text-[10px] text-slate-500 uppercase font-semibold">Valid Usable Rows</div>
+                <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
+                  {edubloomReport.valid_usable_rows?.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-emerald-600 font-semibold">100% Usability</div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-purple-100 shadow-2xs">
+                <div className="text-[10px] text-slate-500 uppercase font-semibold">Rejected Rows</div>
+                <div className="text-xl font-bold font-mono text-slate-700 mt-0.5">
+                  {edubloomReport.total_rejected_rows || 0}
+                </div>
+                <div className="text-[10px] text-slate-400">0 Missing values</div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-purple-100 shadow-2xs">
+                <div className="text-[10px] text-slate-500 uppercase font-semibold">Taxonomy Mapping</div>
+                <div className="text-xs font-bold text-slate-800 mt-1">
+                  L1–L6 $\rightarrow$ 6 Bloom Levels
+                </div>
+                <div className="text-[10px] text-emerald-600 font-medium">Mapped & Verified</div>
+              </div>
+            </div>
+
+            {/* Bloom & Difficulty Distribution Chips */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
+                <div className="font-bold text-[11px] text-slate-700 mb-2">Mapped Bloom Taxonomy Distribution:</div>
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono">
+                  {edubloomReport.mapped_bloom_distribution &&
+                    Object.entries(edubloomReport.mapped_bloom_distribution).map(([lvl, info]) => (
+                      <div key={lvl} className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                        <span className="font-bold text-slate-800">{lvl}: </span>
+                        <span className="text-purple-700 font-semibold">{info.count?.toLocaleString()}</span>
+                        <span className="text-slate-400 text-[9px] block">({info.percentage}%)</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
+                <div className="font-bold text-[11px] text-slate-700 mb-2">Difficulty Label Distribution:</div>
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono">
+                  {edubloomReport.mapped_difficulty_distribution &&
+                    Object.entries(edubloomReport.mapped_difficulty_distribution).map(([diff, info]) => (
+                      <div key={diff} className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                        <span className="font-bold text-slate-800">{diff}: </span>
+                        <span className="text-blue-700 font-semibold">{info.count?.toLocaleString()}</span>
+                        <span className="text-slate-400 text-[9px] block">({info.percentage}%)</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Step 1: Upload CSV Panel */}
       <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">

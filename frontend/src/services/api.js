@@ -341,5 +341,39 @@ export const api = {
 
   getPaperDownloadUrl(paperId) {
     return `${API_BASE}/papers/${paperId}/download`;
+  },
+
+  // Admin: EduBloom Dataset Pipeline & Candidate Models
+  async validateEduBloomDataset() {
+    const res = await fetch(`${API_BASE}/admin/edubloom/validate`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async trainEduBloomCandidateModel(payload = {}) {
+    const res = await fetch(`${API_BASE}/admin/edubloom/train-candidate`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  },
+
+  async stageEduBloomQuestions(payload = {}) {
+    const res = await fetch(`${API_BASE}/admin/edubloom/stage-questions`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  },
+
+  async getEduBloomSummary() {
+    const res = await fetch(`${API_BASE}/admin/edubloom/summary`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
   }
 };

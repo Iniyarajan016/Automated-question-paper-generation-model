@@ -70,11 +70,16 @@ def train_random_forest_pipeline(
     n_estimators: int = 100,
     test_size: float = 0.20,
     user_id: int = None,
-    auto_activate: bool = False
+    auto_activate: bool = False,
+    is_candidate: bool = False
 ):
     """
     Trains a Random Forest classifier for either 'bloom_level' or 'difficulty'.
     Evaluates on held-out test split, persists versioned artifact, and registers in DB.
+    If is_candidate=True:
+      - Automatically sets is_active=False (never overwrites active models).
+      - Computes held-out comparison metrics against the currently active baseline model.
+      - Requires explicit administrative promotion to become active.
     """
     start_time = time.time()
     db = SessionLocal()
@@ -83,6 +88,19 @@ def train_random_forest_pipeline(
         # Step 1: Load and filter records
         if custom_df is not None:
             df = custom_df.copy()
+        elif dataset_source == 'edubloom':
+            from services.edubloom_service import get_edubloom_clean_dataframe
+            df = get_edubloom_clean_dataframe()
+            dataset_name = 'EduBloom Question Bank (Hugging Face - General)'
+        elif dataset_source == 'combined':
+            from services.edubloom_service import get_edubloom_clean_dataframe
+            edubloom_df = get_edubloom_clean_dataframe()
+            tn_questions = db.query(Question).filter(
+                Question.board == 'Tamil Nadu State Board'
+            ).all()
+            tn_df = pd.DataFrame([q.to_dict() for q in tn_questions])
+            df = pd.concat([tn_df, edubloom_df], ignore_index=True)
+            dataset_name = 'Combined TN State Board + EduBloom Question Bank'
         elif dataset_source == 'db':
             # Retrieve TN State Board questions from DB
             questions = db.query(Question).filter(
@@ -230,16 +248,46 @@ def train_random_forest_pipeline(
 
         # Step 7: Versioning and Joblib persistence
         timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-        version_label = f"rf-{task_name[:5]}-v{timestamp_str}"
+        if is_candidate:
+            version_label = f"rf-{task_name[:5]}-candidate-v{timestamp_str}"
+        else:
+            version_label = f"rf-{task_name[:5]}-v{timestamp_str}"
+
         model_filename = f"{version_label}.joblib"
         model_save_path = os.path.join(Config.MODELS_DIR, model_filename)
 
         joblib.dump(pipeline, model_save_path)
         print(f"Persisted trained model pipeline to {model_save_path}")
 
-        # If auto_activate is requested or this is the first model for this task, activate it
-        is_first_model = db.query(ModelVersion).filter_by(task_name=task_name).count() == 0
-        should_activate = auto_activate or is_first_model
+        # Check existing active model for held-out performance comparison
+        active_model = db.query(ModelVersion).filter_by(task_name=task_name, is_active=True).first()
+        active_comparison = None
+        if active_model:
+            delta_acc = round(test_acc - (active_model.accuracy or 0.0), 4)
+            delta_f1 = round(macro_f1 - (active_model.macro_f1 or 0.0), 4)
+            delta_prec = round(macro_prec - (active_model.macro_precision or 0.0), 4)
+            delta_rec = round(macro_rec - (active_model.macro_recall or 0.0), 4)
+            active_comparison = {
+                'active_version': active_model.version,
+                'active_accuracy': active_model.accuracy,
+                'active_macro_f1': active_model.macro_f1,
+                'active_macro_precision': active_model.macro_precision,
+                'active_macro_recall': active_model.macro_recall,
+                'candidate_accuracy': round(test_acc, 4),
+                'candidate_macro_f1': round(macro_f1, 4),
+                'delta_accuracy': delta_acc,
+                'delta_macro_f1': delta_f1,
+                'delta_macro_precision': delta_prec,
+                'delta_macro_recall': delta_rec,
+                'performance_improved': delta_f1 >= 0
+            }
+
+        # For candidate models, NEVER automatically activate
+        if is_candidate:
+            should_activate = False
+        else:
+            is_first_model = db.query(ModelVersion).filter_by(task_name=task_name).count() == 0
+            should_activate = auto_activate or is_first_model
 
         if should_activate:
             # Deactivate older models of same task
@@ -250,6 +298,7 @@ def train_random_forest_pipeline(
 
         eval_summary = {
             'task_name': task_name,
+            'is_candidate': is_candidate,
             'classes': classes_present,
             'train_samples': len(X_train),
             'test_samples': len(X_test),
@@ -264,14 +313,14 @@ def train_random_forest_pipeline(
                 'macro_f1': round(baseline_macro_f1, 4),
                 'strategy': 'most_frequent'
             },
+            'active_model_comparison': active_comparison,
             'per_class': per_class_metrics,
             'confusion_matrix': cm_dict,
             'class_distribution': class_counts,
             'warnings': warnings,
             'generalization_note': (
                 "Evaluation was conducted on a held-out 80/20 stratified split. "
-                "Classifiers trained on school examination items generalize to similar question formats "
-                "within the Tamil Nadu State Board syllabus."
+                "Candidate models are evaluated independently and require explicit admin action before promotion."
             )
         }
 
@@ -301,23 +350,31 @@ def train_random_forest_pipeline(
         db.commit()
         db.refresh(model_version)
 
-        # Also write report JSON for backward compatibility
-        report_file = 'bloom_evaluation.json' if task_name == 'bloom_level' else 'difficulty_evaluation.json'
-        with open(os.path.join(Config.REPORTS_DIR, report_file), 'w') as f:
-            json.dump(eval_summary, f, indent=2)
+        # Write report JSON: write candidate report if candidate, or standard evaluation report if activated
+        if should_activate:
+            report_file = 'bloom_evaluation.json' if task_name == 'bloom_level' else 'difficulty_evaluation.json'
+            with open(os.path.join(Config.REPORTS_DIR, report_file), 'w') as f:
+                json.dump(eval_summary, f, indent=2)
+        elif is_candidate:
+            report_file = 'bloom_candidate_evaluation.json' if task_name == 'bloom_level' else 'difficulty_candidate_evaluation.json'
+            with open(os.path.join(Config.REPORTS_DIR, report_file), 'w') as f:
+                json.dump(eval_summary, f, indent=2)
 
         # Log audit entry
+        action_name = f"TRAIN_CANDIDATE_MODEL_{task_name.upper()}" if is_candidate else f"TRAIN_MODEL_{task_name.upper()}"
         log_entry = AuditLog(
             user_id=user_id,
-            action=f"TRAIN_MODEL_{task_name.upper()}",
+            action=action_name,
             entity_type="ModelVersion",
             entity_id=str(model_version.id),
             details={
                 'version': version_label,
+                'is_candidate': is_candidate,
                 'test_accuracy': round(test_acc, 4),
                 'macro_f1': round(macro_f1, 4),
                 'train_samples': len(X_train),
-                'test_samples': len(X_test)
+                'test_samples': len(X_test),
+                'active_comparison': active_comparison
             }
         )
         db.add(log_entry)
@@ -328,9 +385,12 @@ def train_random_forest_pipeline(
             'model_id': model_version.id,
             'version': version_label,
             'task_name': task_name,
+            'is_candidate': is_candidate,
             'is_active': should_activate,
+            'active_model_comparison': active_comparison,
             'evaluation': eval_summary,
-            'duration_seconds': duration
+            'duration_seconds': duration,
+            'promotion_required': not should_activate
         }
 
     except Exception as e:
@@ -338,6 +398,38 @@ def train_random_forest_pipeline(
         return {'success': False, 'error': f'Training failed: {str(e)}'}
     finally:
         db.close()
+
+
+def train_edubloom_candidate_model(
+    task_name: str = 'bloom_level',
+    sample_limit: int = None,
+    n_estimators: int = 100,
+    user_id: int = None
+):
+    """
+    Helper to train a candidate Random Forest model strictly on EduBloom dataset.
+    Never activates candidate model automatically.
+    Returns candidate metrics and comparison with currently active model.
+    """
+    from services.edubloom_service import get_edubloom_clean_dataframe
+    df = get_edubloom_clean_dataframe()
+    if sample_limit and 0 < sample_limit < len(df):
+        target_col = 'bloom_level' if task_name == 'bloom_level' else 'difficulty'
+        classes = df[target_col].unique()
+        samples_per_class = max(10, sample_limit // len(classes))
+        sampled_parts = [df[df[target_col] == c].sample(n=min(len(df[df[target_col] == c]), samples_per_class), random_state=42) for c in classes]
+        df = pd.concat(sampled_parts, ignore_index=True)
+
+    return train_random_forest_pipeline(
+        task_name=task_name,
+        dataset_source='edubloom',
+        custom_df=df,
+        dataset_name='EduBloom Question Bank (Hugging Face - General)',
+        n_estimators=n_estimators,
+        user_id=user_id,
+        auto_activate=False,
+        is_candidate=True
+    )
 
 
 def activate_version(model_id: int, user_id: int = None):

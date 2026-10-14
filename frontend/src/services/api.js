@@ -43,7 +43,6 @@ export const authStorage = {
 
 async function handleResponse(response) {
   if (response.status === 401) {
-    // If unauthorized, clear local session
     authStorage.clear();
   }
 
@@ -60,9 +59,12 @@ async function handleResponse(response) {
   return response.json();
 }
 
-function getAuthHeaders() {
+function getAuthHeaders(isFormData = false) {
   const token = authStorage.getToken();
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -85,11 +87,11 @@ export const api = {
     return data;
   },
 
-  async register(email, password, full_name) {
+  async register(email, password, full_name, role = 'teacher') {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, full_name })
+      body: JSON.stringify({ email, password, full_name, role })
     });
     const data = await handleResponse(res);
     if (data.token) {
@@ -110,13 +112,11 @@ export const api = {
     authStorage.clear();
   },
 
-  // Public system status
   async getHealth() {
     const res = await fetch(`${API_BASE}/health`);
     return handleResponse(res);
   },
 
-  // Protected application endpoints
   async getDashboardStats() {
     const res = await fetch(`${API_BASE}/dashboard/stats`, {
       headers: getAuthHeaders()
@@ -124,6 +124,158 @@ export const api = {
     return handleResponse(res);
   },
 
+  // Tamil Nadu State Board Curriculum
+  async getCurriculumClasses() {
+    const res = await fetch(`${API_BASE}/curriculum/classes`);
+    return handleResponse(res);
+  },
+
+  async getCurriculumSubjects(classGrade) {
+    const res = await fetch(`${API_BASE}/curriculum/subjects?class_grade=${encodeURIComponent(classGrade)}`);
+    return handleResponse(res);
+  },
+
+  async getCurriculumChapters(classGrade, subject) {
+    const res = await fetch(
+      `${API_BASE}/curriculum/chapters?class_grade=${encodeURIComponent(classGrade)}&subject=${encodeURIComponent(subject)}`
+    );
+    return handleResponse(res);
+  },
+
+  // Admin: Staff Management
+  async getStaff() {
+    const res = await fetch(`${API_BASE}/admin/staff`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async createStaff(data) {
+    const res = await fetch(`${API_BASE}/admin/staff`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
+  },
+
+  async updateStaff(id, data) {
+    const res = await fetch(`${API_BASE}/admin/staff/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
+  },
+
+  async resetStaffPassword(id, password) {
+    const res = await fetch(`${API_BASE}/admin/staff/${id}/reset-password`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ password })
+    });
+    return handleResponse(res);
+  },
+
+  async deleteStaff(id) {
+    const res = await fetch(`${API_BASE}/admin/staff/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  // Admin: Dataset Management
+  async uploadDataset(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE}/admin/datasets/upload`, {
+      method: 'POST',
+      headers: getAuthHeaders(true),
+      body: formData
+    });
+    return handleResponse(res);
+  },
+
+  async getDatasets() {
+    const res = await fetch(`${API_BASE}/admin/datasets`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async getDataset(id) {
+    const res = await fetch(`${API_BASE}/admin/datasets/${id}`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async validateDataset(id, columnMapping, defaultClass = null) {
+    const res = await fetch(`${API_BASE}/admin/datasets/${id}/validate`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ column_mapping: columnMapping, default_class: defaultClass })
+    });
+    return handleResponse(res);
+  },
+
+  async importDatasetToQuestionBank(id) {
+    const res = await fetch(`${API_BASE}/admin/datasets/${id}/import`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  // Admin: Model Training & Evaluation (Random Forest)
+  async trainRandomForestModel(payload) {
+    const res = await fetch(`${API_BASE}/admin/models/train`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  },
+
+  async getModelVersions(task = '') {
+    const q = task ? `?task=${encodeURIComponent(task)}` : '';
+    const res = await fetch(`${API_BASE}/admin/models/versions${q}`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async activateModelVersion(id) {
+    const res = await fetch(`${API_BASE}/admin/models/${id}/activate`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async getModelEvaluation() {
+    const res = await fetch(`${API_BASE}/models/evaluation`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async getModelStatus() {
+    const res = await fetch(`${API_BASE}/models/status`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async getAdminOverview() {
+    const res = await fetch(`${API_BASE}/admin/overview`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  // Question Bank
   async getQuestions(params = {}) {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, val]) => {
@@ -132,6 +284,14 @@ export const api = {
       }
     });
     const res = await fetch(`${API_BASE}/questions?${query.toString()}`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async getQuestionFilters(classGrade = '') {
+    const q = classGrade ? `?class_grade=${encodeURIComponent(classGrade)}` : '';
+    const res = await fetch(`${API_BASE}/questions/filters${q}`, {
       headers: getAuthHeaders()
     });
     return handleResponse(res);
@@ -150,25 +310,12 @@ export const api = {
     const res = await fetch(`${API_BASE}/classify`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ question: text, text })
     });
     return handleResponse(res);
   },
 
-  async getModelStatus() {
-    const res = await fetch(`${API_BASE}/models/status`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  async getModelEvaluation() {
-    const res = await fetch(`${API_BASE}/models/evaluation`, {
-      headers: getAuthHeaders()
-    });
-    return handleResponse(res);
-  },
-
+  // Question Paper Generation
   async generatePaper(payload) {
     const res = await fetch(`${API_BASE}/generate-paper`, {
       method: 'POST',
@@ -180,6 +327,13 @@ export const api = {
 
   async getHistory() {
     const res = await fetch(`${API_BASE}/history`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async getPaperDetails(paperId) {
+    const res = await fetch(`${API_BASE}/papers/${paperId}`, {
       headers: getAuthHeaders()
     });
     return handleResponse(res);

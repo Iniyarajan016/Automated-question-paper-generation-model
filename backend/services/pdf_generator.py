@@ -1,6 +1,6 @@
 """
-PDF Generation Service using ReportLab
-Generates downloadable examination papers and teacher summaries.
+PDF Generation Service using ReportLab for Tamil Nadu State Board (Classes 6–12)
+Produces formal, printable examination papers and teacher summaries.
 """
 
 import os
@@ -8,74 +8,107 @@ import sys
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
+from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from reportlab.lib.colors import HexColor
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, HRFlowable
+    HRFlowable
 )
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from config import Config
 
-
-# Color scheme
 NAVY = HexColor('#1e3a5f')
 DARK_BLUE = HexColor('#2c5282')
-LIGHT_GRAY = HexColor('#f7fafc')
-BORDER_GRAY = HexColor('#e2e8f0')
-ACCENT = HexColor('#3182ce')
+LIGHT_BG = HexColor('#f7fafc')
+BORDER_GRAY = HexColor('#cbd5e0')
+ACCENT = HexColor('#2b6cb0')
 
 
 def create_styles():
-    """Create custom paragraph styles."""
+    """Create custom paragraph styles for formal state board examination papers."""
     styles = getSampleStyleSheet()
-    
+
     styles.add(ParagraphStyle(
-        name='ExamTitle',
-        parent=styles['Title'],
-        fontSize=18,
-        textColor=NAVY,
-        spaceAfter=6,
+        name='BoardHeader',
+        parent=styles['Normal'],
+        fontSize=12,
+        textColor=DARK_BLUE,
+        spaceAfter=2,
         alignment=TA_CENTER,
         fontName='Helvetica-Bold',
     ))
-    
+
+    styles.add(ParagraphStyle(
+        name='ExamTitle',
+        parent=styles['Title'],
+        fontSize=16,
+        textColor=NAVY,
+        spaceAfter=4,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold',
+    ))
+
     styles.add(ParagraphStyle(
         name='ExamSubtitle',
         parent=styles['Normal'],
-        fontSize=12,
+        fontSize=11,
         textColor=DARK_BLUE,
         spaceAfter=4,
         alignment=TA_CENTER,
         fontName='Helvetica',
     ))
-    
+
+    styles.add(ParagraphStyle(
+        name='MetaKey',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=NAVY,
+        fontName='Helvetica-Bold',
+        alignment=TA_LEFT
+    ))
+
+    styles.add(ParagraphStyle(
+        name='MetaVal',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=HexColor('#2d3748'),
+        fontName='Helvetica',
+        alignment=TA_LEFT
+    ))
+
     styles.add(ParagraphStyle(
         name='SectionHeader',
         parent=styles['Heading2'],
-        fontSize=13,
+        fontSize=11,
         textColor=NAVY,
-        spaceBefore=16,
-        spaceAfter=8,
+        spaceBefore=14,
+        spaceAfter=4,
         fontName='Helvetica-Bold',
-        borderWidth=1,
-        borderColor=BORDER_GRAY,
-        borderPadding=4,
     ))
-    
+
+    styles.add(ParagraphStyle(
+        name='SectionInstruction',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=HexColor('#4a5568'),
+        spaceBefore=2,
+        spaceAfter=6,
+        fontName='Helvetica-Oblique',
+    ))
+
     styles.add(ParagraphStyle(
         name='QuestionText',
         parent=styles['Normal'],
-        fontSize=11,
-        leading=15,
-        spaceBefore=8,
-        spaceAfter=4,
+        fontSize=10,
+        leading=14,
+        spaceBefore=6,
+        spaceAfter=2,
         fontName='Helvetica',
-        alignment=TA_JUSTIFY,
+        alignment=TA_LEFT,
     ))
-    
+
     styles.add(ParagraphStyle(
         name='MarksText',
         parent=styles['Normal'],
@@ -84,27 +117,27 @@ def create_styles():
         alignment=TA_RIGHT,
         fontName='Helvetica-Bold',
     ))
-    
+
     styles.add(ParagraphStyle(
         name='InstructionText',
         parent=styles['Normal'],
-        fontSize=10,
-        leading=14,
-        spaceBefore=2,
-        spaceAfter=2,
+        fontSize=9,
+        leading=13,
+        spaceBefore=1,
+        spaceAfter=1,
         fontName='Helvetica',
-        leftIndent=20,
+        leftIndent=12,
     ))
-    
+
     styles.add(ParagraphStyle(
         name='FooterText',
         parent=styles['Normal'],
-        fontSize=9,
-        textColor=DARK_BLUE,
+        fontSize=8,
+        textColor=HexColor('#718096'),
         alignment=TA_CENTER,
-        fontName='Helvetica-Oblique',
+        fontName='Helvetica',
     ))
-    
+
     return styles
 
 
@@ -112,215 +145,176 @@ def generate_exam_pdf(
     paper_data,
     questions,
     output_dir=None,
+    sections=None,
     include_teacher_labels=False
 ):
     """
-    Generate a PDF examination paper.
-    
-    Args:
-        paper_data: dict with title, board, class_grade, subject, total_marks, etc.
-        questions: list of question dicts
-        output_dir: directory to save PDF
-        include_teacher_labels: if True, include Bloom/difficulty labels
-    
-    Returns:
-        filepath of generated PDF
+    Generate a formatted Tamil Nadu State Board examination paper PDF.
     """
     if output_dir is None:
         output_dir = Config.GENERATED_PAPERS_DIR
-    
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Generate filename
+
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_title = "".join(c for c in paper_data.get('title', 'exam') if c.isalnum() or c in ' _-')[:50]
-    filename = f"exam_{safe_title.replace(' ', '_')}_{timestamp}.pdf"
+    safe_title = "".join(c for c in paper_data.get('title', 'exam') if c.isalnum() or c in ' _-')[:40]
+    filename = f"tnsb_{safe_title.replace(' ', '_')}_{timestamp}.pdf"
     filepath = os.path.join(output_dir, filename)
-    
-    # Build PDF
+
     doc = SimpleDocTemplate(
         filepath,
         pagesize=A4,
-        topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
+        topMargin=1.2 * cm,
+        bottomMargin=1.2 * cm,
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
     )
-    
+
     styles = create_styles()
     story = []
-    
+
     # --- Header ---
-    title = paper_data.get('title', 'Examination Paper')
-    story.append(Paragraph(title, styles['ExamTitle']))
-    
-    subtitle_parts = []
-    if paper_data.get('board'):
-        subtitle_parts.append(paper_data['board'])
-    if paper_data.get('class_grade'):
-        subtitle_parts.append(f"Class {paper_data['class_grade']}")
-    if paper_data.get('subject'):
-        subtitle_parts.append(paper_data['subject'])
-    
-    if subtitle_parts:
-        story.append(Paragraph(' | '.join(subtitle_parts), styles['ExamSubtitle']))
-    
-    # Date and marks line
-    total_marks = paper_data.get('total_marks', sum(q.get('marks', 0) for q in questions))
-    date_str = datetime.now().strftime('%d %B %Y')
-    info_parts = [f"Date: {date_str}"]
-    if total_marks:
-        info_parts.append(f"Maximum Marks: {total_marks}")
-    info_parts.append(f"Total Questions: {len(questions)}")
-    
-    story.append(Spacer(1, 8))
-    story.append(Paragraph(' | '.join(info_parts), styles['ExamSubtitle']))
-    
-    # Divider
-    story.append(Spacer(1, 8))
-    story.append(HRFlowable(width="100%", color=NAVY, thickness=2))
-    story.append(Spacer(1, 8))
-    
-    # --- Instructions ---
-    story.append(Paragraph("General Instructions:", styles['SectionHeader']))
-    
-    instructions = [
-        "All questions are compulsory unless otherwise stated.",
-        "Read each question carefully before answering.",
-        "Marks for each question are indicated on the right side.",
-        "Write neatly and legibly.",
+    story.append(Paragraph("TAMIL NADU STATE BOARD — SAMACHEER KALVI", styles['BoardHeader']))
+    exam_title = paper_data.get('title', 'Terminal Examination')
+    story.append(Paragraph(exam_title.upper(), styles['ExamTitle']))
+
+    # Meta table
+    class_val = paper_data.get('class_grade', 'Class 10')
+    subject_val = paper_data.get('subject', 'Mathematics')
+    duration_min = paper_data.get('duration_minutes', 90)
+    dur_str = f"{duration_min // 60}h {duration_min % 60}m" if duration_min >= 60 else f"{duration_min} Mins"
+    max_marks = paper_data.get('total_marks', sum(q.get('marks', 0) for q in questions))
+
+    meta_table_data = [
+        [
+            Paragraph(f"<b>Class:</b> {class_val}", styles['MetaVal']),
+            Paragraph(f"<b>Subject:</b> {subject_val}", styles['MetaVal']),
+            Paragraph(f"<b>Time Allowed:</b> {dur_str}", styles['MetaVal']),
+            Paragraph(f"<b>Maximum Marks:</b> {max_marks}", styles['MetaVal']),
+        ]
     ]
-    
+
+    meta_table = Table(meta_table_data, colWidths=[4.5 * cm, 5.0 * cm, 4.0 * cm, 4.5 * cm])
+    meta_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), LIGHT_BG),
+        ('BOX', (0, 0), (-1, -1), 1, BORDER_GRAY),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, BORDER_GRAY),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+
+    story.append(Spacer(1, 4))
+    story.append(meta_table)
+    story.append(Spacer(1, 6))
+
+    # General Instructions
+    story.append(HRFlowable(width="100%", color=NAVY, thickness=1.5))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("<b>GENERAL INSTRUCTIONS:</b>", styles['MetaKey']))
+
+    instructions = [
+        "Check that the question paper contains all pages and all questions are printed legibly.",
+        "Candidate should write the Register Number clearly on the answer booklet.",
+        "Marks for each question or section are indicated against the respective items.",
+        "Rough work should be done in the designated margins or rough sheets provided."
+    ]
     if paper_data.get('topic'):
-        instructions.append(f"This paper covers the topic: {paper_data['topic']}.")
-    
+        instructions.append(f"Portions covered: {paper_data['topic']}")
+
     for inst in instructions:
         story.append(Paragraph(f"• {inst}", styles['InstructionText']))
-    
-    story.append(Spacer(1, 12))
+
+    story.append(Spacer(1, 4))
     story.append(HRFlowable(width="100%", color=BORDER_GRAY, thickness=1))
-    
-    # --- Questions ---
-    story.append(Paragraph("Questions", styles['SectionHeader']))
-    
-    for i, q in enumerate(questions, 1):
-        marks = q.get('marks', '')
-        marks_str = f"[{marks} marks]" if marks else ""
-        
-        # Question number and text
-        q_text = f"<b>Q{i}.</b> {q.get('question', 'Question text not available')}"
-        if marks_str:
-            q_text += f"  <font color='#2c5282'><b>{marks_str}</b></font>"
-        
-        story.append(Paragraph(q_text, styles['QuestionText']))
-        
-        # Teacher-only labels (optional)
-        if include_teacher_labels:
-            labels = []
-            if q.get('bloom_level'):
-                labels.append(f"Bloom: {q['bloom_level']}")
-            if q.get('difficulty'):
-                labels.append(f"Difficulty: {q['difficulty']}")
-            if labels:
-                label_text = f"<i><font color='#718096' size='9'>({', '.join(labels)})</font></i>"
-                story.append(Paragraph(label_text, styles['InstructionText']))
-        
+
+    # --- Questions and Sections ---
+    # If explicit sections were passed, use them; otherwise organize by marks
+    if not sections:
+        # Build sections dynamically
+        s_a = [q for q in questions if (q.get('marks') or 2) <= 1.5]
+        s_b = [q for q in questions if 1.5 < (q.get('marks') or 2) <= 3.5]
+        s_c = [q for q in questions if (q.get('marks') or 2) > 3.5]
+
+        sections = []
+        if s_a:
+            sections.append({
+                'name': 'SECTION A (Objective & Very Short Answer)',
+                'instructions': 'Answer all questions. Each question carries 1 mark.',
+                'questions': s_a
+            })
+        if s_b:
+            sections.append({
+                'name': 'SECTION B (Short Answer & Conceptual)',
+                'instructions': 'Answer all questions. Each question carries 2 or 3 marks as indicated.',
+                'questions': s_b
+            })
+        if s_c:
+            sections.append({
+                'name': 'SECTION C (Long Answer & Descriptive)',
+                'instructions': 'Answer all questions in detail with necessary diagrams/working. Each carries 5 marks.',
+                'questions': s_c
+            })
+        if not sections:
+            sections.append({
+                'name': 'ALL SECTIONS',
+                'instructions': 'Answer all questions.',
+                'questions': questions
+            })
+
+    q_global_num = 1
+    for sec in sections:
         story.append(Spacer(1, 6))
-    
+        story.append(Paragraph(sec.get('name', 'SECTION'), styles['SectionHeader']))
+        if sec.get('instructions'):
+            story.append(Paragraph(sec['instructions'], styles['SectionInstruction']))
+
+        for q in sec.get('questions', []):
+            marks_val = q.get('marks', 2.0)
+            marks_str = f"[{int(marks_val) if marks_val == int(marks_val) else marks_val}]"
+
+            q_text = q.get('question', '').strip()
+            num = q.get('display_number', q_global_num)
+            q_global_num += 1
+
+            # Format question row as a 2-column table: Question on left, Marks on right
+            row_data = [
+                [
+                    Paragraph(f"<b>{num}.</b>  {q_text}", styles['QuestionText']),
+                    Paragraph(marks_str, styles['MarksText'])
+                ]
+            ]
+            q_table = Table(row_data, colWidths=[16.5 * cm, 1.5 * cm])
+            q_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 2),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            story.append(q_table)
+
+            if include_teacher_labels:
+                lbls = []
+                if q.get('bloom_level'):
+                    lbls.append(f"Bloom: {q['bloom_level']}")
+                if q.get('difficulty'):
+                    lbls.append(f"Difficulty: {q['difficulty']}")
+                if lbls:
+                    story.append(Paragraph(f"<font color='#718096' size='8'><i>({', '.join(lbls)})</i></font>", styles['InstructionText']))
+
     # --- Footer ---
-    story.append(Spacer(1, 20))
-    story.append(HRFlowable(width="100%", color=NAVY, thickness=2))
-    story.append(Spacer(1, 8))
-    
-    total_computed = sum(q.get('marks', 0) for q in questions if q.get('marks'))
-    story.append(Paragraph(
-        f"<b>Total Marks: {total_computed}</b> | Questions: {len(questions)}",
-        styles['ExamSubtitle']
-    ))
+    story.append(Spacer(1, 16))
+    story.append(HRFlowable(width="100%", color=NAVY, thickness=1.5))
     story.append(Spacer(1, 4))
     story.append(Paragraph(
-        "Generated by ExamForge AI — Intelligent Assessments, Balanced Question Papers",
+        f"TAMIL NADU STATE BOARD CURRICULUM — TOTAL QUESTIONS: {len(questions)} | MAXIMUM MARKS: {max_marks}",
         styles['FooterText']
     ))
-    
-    # Build PDF
+    story.append(Paragraph("ExamForge AI Evaluation & Examination Management System", styles['FooterText']))
+
     doc.build(story)
-    
     return filepath, filename
 
 
 def generate_teacher_summary_pdf(paper_data, questions, output_dir=None):
-    """
-    Generate a teacher-facing summary with Bloom and difficulty distributions.
-    """
-    if output_dir is None:
-        output_dir = Config.GENERATED_PAPERS_DIR
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"teacher_summary_{timestamp}.pdf"
-    filepath = os.path.join(output_dir, filename)
-    
-    doc = SimpleDocTemplate(filepath, pagesize=A4, topMargin=1.5*cm, bottomMargin=1.5*cm)
-    styles = create_styles()
-    story = []
-    
-    story.append(Paragraph("Teacher Summary — " + paper_data.get('title', 'Exam'), styles['ExamTitle']))
-    story.append(Spacer(1, 12))
-    
-    # Questions with labels
-    for i, q in enumerate(questions, 1):
-        text = (
-            f"<b>Q{i}.</b> {q.get('question', '')[:100]}... "
-            f"| Bloom: <b>{q.get('bloom_level', 'N/A')}</b> "
-            f"| Difficulty: <b>{q.get('difficulty', 'N/A')}</b> "
-            f"| Marks: <b>{q.get('marks', 'N/A')}</b>"
-        )
-        story.append(Paragraph(text, styles['QuestionText']))
-    
-    # Distribution tables
-    from collections import Counter
-    bloom_dist = Counter(q.get('bloom_level', 'N/A') for q in questions)
-    diff_dist = Counter(q.get('difficulty', 'N/A') for q in questions)
-    
-    story.append(Spacer(1, 16))
-    story.append(Paragraph("Bloom's Taxonomy Distribution", styles['SectionHeader']))
-    bloom_data = [['Level', 'Count', 'Percentage']]
-    for level, count in sorted(bloom_dist.items()):
-        pct = f"{100 * count / len(questions):.1f}%"
-        bloom_data.append([level, str(count), pct])
-    
-    bloom_table = Table(bloom_data, colWidths=[150, 80, 100])
-    bloom_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), HexColor('#ffffff')),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, BORDER_GRAY),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ffffff'), LIGHT_GRAY]),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-    ]))
-    story.append(bloom_table)
-    
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("Difficulty Distribution", styles['SectionHeader']))
-    diff_data = [['Level', 'Count', 'Percentage']]
-    for level, count in sorted(diff_dist.items()):
-        pct = f"{100 * count / len(questions):.1f}%"
-        diff_data.append([level, str(count), pct])
-    
-    diff_table = Table(diff_data, colWidths=[150, 80, 100])
-    diff_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), NAVY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), HexColor('#ffffff')),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, BORDER_GRAY),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [HexColor('#ffffff'), LIGHT_GRAY]),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-    ]))
-    story.append(diff_table)
-    
-    doc.build(story)
-    return filepath, filename
+    """Generate summary PDF for teachers."""
+    return generate_exam_pdf(paper_data, questions, output_dir=output_dir, include_teacher_labels=True)

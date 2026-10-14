@@ -1,6 +1,6 @@
 """
-Authentication and JWT Token Utilities for ExamForge AI.
-Handles password hashing, token encoding/decoding, and Flask route decorators.
+Authentication and Role-Based Access Control (RBAC) Utilities for ExamForge AI.
+Handles password hashing, token encoding/decoding, role verification, and audit logging.
 """
 
 import os
@@ -12,7 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from config import Config
 from database.db import SessionLocal
-from database.models import User
+from database.models import User, AuditLog
 
 JWT_SECRET = os.environ.get('JWT_SECRET_KEY', Config.SECRET_KEY)
 JWT_ALGORITHM = 'HS256'
@@ -30,7 +30,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(user: User) -> str:
-    """Generate signed JWT token containing user identity and expiration."""
+    """Generate signed JWT token containing user identity, email, role, and expiration."""
     payload = {
         'sub': str(user.id),
         'email': user.email,
@@ -67,7 +67,7 @@ def auth_required(f):
         
         db = SessionLocal()
         try:
-            user = db.query(User).filter_by(id=payload['sub']).first()
+            user = db.query(User).filter_by(id=int(payload['sub'])).first()
             if not user or not user.is_active:
                 return jsonify({'error': 'User account inactive or not found.'}), 401
             g.current_user = user
@@ -76,3 +76,62 @@ def auth_required(f):
             
         return f(*args, **kwargs)
     return decorated
+
+
+def admin_required(f):
+    """
+    Decorator to enforce Administrator privileges.
+    Guarantees that teachers cannot access administrative endpoints.
+    Returns HTTP 403 Forbidden with descriptive error if non-admin attempts access.
+    """
+    @wraps(f)
+    @auth_required
+    def decorated(*args, **kwargs):
+        current_user = getattr(g, 'current_user', None)
+        if not current_user or current_user.role != 'admin':
+            return jsonify({
+                'error': 'Access forbidden. Administrator privileges are required to perform this action.',
+                'role': current_user.role if current_user else 'anonymous'
+            }), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def teacher_required(f):
+    """
+    Decorator to ensure user is an active teacher or administrator.
+    """
+    @wraps(f)
+    @auth_required
+    def decorated(*args, **kwargs):
+        current_user = getattr(g, 'current_user', None)
+        if not current_user or current_user.role not in ['teacher', 'admin']:
+            return jsonify({
+                'error': 'Access forbidden. Active teaching or administrative credentials required.'
+            }), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def log_audit(db, action: str, entity_type: str = None, entity_id: str = None, details: dict = None, user: User = None):
+    """
+    Record an administrative audit log entry.
+    """
+    try:
+        user_to_log = user or getattr(g, 'current_user', None)
+        user_id = user_to_log.id if user_to_log else None
+        user_email = user_to_log.email if user_to_log else 'system'
+        
+        entry = AuditLog(
+            user_id=user_id,
+            user_email=user_email,
+            action=action,
+            entity_type=entity_type,
+            entity_id=str(entity_id) if entity_id else None,
+            details=details or {},
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(entry)
+        db.commit()
+    except Exception as e:
+        print(f"Failed to record audit log: {e}")

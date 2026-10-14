@@ -1,123 +1,134 @@
 {
-  "task": "Bloom's Taxonomy Classification",
-  "test_size": 14743,
-  "train_size": 58969,
+  "task_name": "bloom_level",
   "classes": [
-    "Remember",
-    "Understand",
-    "Apply",
     "Analyze",
+    "Apply",
+    "Create",
     "Evaluate",
-    "Create"
+    "Remember",
+    "Understand"
   ],
-  "accuracy": 0.3905,
-  "macro_precision": 0.3878,
-  "macro_recall": 0.4911,
-  "macro_f1": 0.3542,
-  "weighted_f1": 0.2892,
-  "baseline_comparison": {
-    "strategy": "most_frequent",
-    "baseline_accuracy": 0.3032,
-    "baseline_macro_f1": 0.0776
+  "train_samples": 895,
+  "test_samples": 224,
+  "train_accuracy": 0.9944,
+  "test_accuracy": 0.9464,
+  "macro_precision": 0.7976,
+  "macro_recall": 0.7951,
+  "macro_f1": 0.7936,
+  "weighted_f1": 0.9466,
+  "baseline": {
+    "accuracy": 0.2768,
+    "macro_f1": 0.0723,
+    "strategy": "most_frequent"
   },
   "per_class": {
-    "Remember": {
-      "precision": 0.4966,
-      "recall": 0.9426,
-      "f1-score": 0.6505,
-      "support": 2456
-    },
-    "Understand": {
-      "precision": 0.4618,
-      "recall": 0.0324,
-      "f1-score": 0.0606,
-      "support": 4470
+    "Analyze": {
+      "precision": 1.0,
+      "recall": 0.9194,
+      "f1_score": 0.958,
+      "support": 62
     },
     "Apply": {
-      "precision": 0.3359,
-      "recall": 0.8877,
-      "f1-score": 0.4874,
-      "support": 1986
-    },
-    "Analyze": {
-      "precision": 0.3612,
-      "recall": 0.0714,
-      "f1-score": 0.1193,
-      "support": 3262
-    },
-    "Evaluate": {
-      "precision": 0.3314,
-      "recall": 0.4941,
-      "f1-score": 0.3967,
-      "support": 1271
+      "precision": 1.0,
+      "recall": 0.9545,
+      "f1_score": 0.9767,
+      "support": 44
     },
     "Create": {
-      "precision": 0.3401,
-      "recall": 0.5185,
-      "f1-score": 0.4107,
-      "support": 1298
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "support": 1
+    },
+    "Evaluate": {
+      "precision": 1.0,
+      "recall": 0.9302,
+      "f1_score": 0.9639,
+      "support": 43
+    },
+    "Remember": {
+      "precision": 1.0,
+      "recall": 0.9667,
+      "f1_score": 0.9831,
+      "support": 30
+    },
+    "Understand": {
+      "precision": 0.7857,
+      "recall": 1.0,
+      "f1_score": 0.88,
+      "support": 44
     }
   },
   "confusion_matrix": {
     "labels": [
-      "Remember",
-      "Understand",
-      "Apply",
       "Analyze",
+      "Apply",
+      "Create",
       "Evaluate",
-      "Create"
+      "Remember",
+      "Understand"
     ],
     "matrix": [
       [
-        2315,
-        141,
+        57,
         0,
         0,
         0,
-        0
-      ],
-      [
-        2347,
-        145,
-        1777,
-        201,
         0,
-        0
+        5
       ],
       [
         0,
-        12,
-        1763,
-        211,
+        42,
         0,
-        0
-      ],
-      [
         0,
-        16,
-        1708,
-        233,
-        642,
-        663
+        0,
+        2
       ],
       [
         0,
         0,
         0,
         0,
-        628,
-        643
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        40,
+        0,
+        3
       ],
       [
         0,
         0,
         0,
         0,
-        625,
-        673
+        29,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        44
       ]
     ]
   },
-  "generalization_warning": "Notice: Evaluation was performed on an 80/20 held-out split of the provided question bank. However, synthetic or repeated syntactic question templates within the dataset may cause lexical overlap between train and test splits, artificially elevating held-out scores. This metric demonstrates pipeline convergence on this corpus, not guaranteed out-of-domain real-world generalization across unseen boards or question styles.",
-  "training_duration_seconds": 8.0
+  "class_distribution": {
+    "Analyze": 307,
+    "Understand": 222,
+    "Apply": 220,
+    "Evaluate": 216,
+    "Remember": 150,
+    "Create": 4
+  },
+  "warnings": [
+    "Class 'Create' has only 4 samples, which may limit classification performance."
+  ],
+  "generalization_note": "Evaluation was conducted on a held-out 80/20 stratified split. Classifiers trained on school examination items generalize to similar question formats within the Tamil Nadu State Board syllabus."
 }

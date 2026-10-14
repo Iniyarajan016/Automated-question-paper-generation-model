@@ -67,6 +67,14 @@ class ModelPredictor:
             'both_ready': bloom_exists and diff_exists,
         }
     
+    def reload_models(self):
+        """Forces reloading of models from disk when a new version is activated."""
+        self._bloom_model = None
+        self._difficulty_model = None
+        self._bloom_loaded = False
+        self._difficulty_loaded = False
+        print("ModelPredictor cache cleared; models will be reloaded on next inference.")
+    
     def predict_bloom(self, question_text):
         """
         Predict Bloom's Taxonomy level for a question.

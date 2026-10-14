@@ -9,15 +9,22 @@ import {
   CheckCircle2,
   AlertCircle,
   TrendingUp,
-  Award,
   Sparkles,
-  BookOpen
+  BookOpen,
+  PlusCircle,
+  FolderUp,
+  ShieldCheck,
+  History,
+  Download,
+  Calendar,
+  Users
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Overview() {
+  const { user, isAdmin } = useAuth();
   const [stats, setStats] = useState(null);
-  const [evalData, setEvalData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,153 +32,360 @@ export default function Overview() {
     async function loadData() {
       try {
         setLoading(true);
-        const [statsRes, evalRes] = await Promise.allSettled([
-          api.getDashboardStats(),
-          api.getModelEvaluation()
-        ]);
-
-        if (statsRes.status === 'fulfilled') {
-          setStats(statsRes.value);
-        } else {
-          setError(statsRes.reason.message);
-        }
-
-        if (evalRes.status === 'fulfilled') {
-          setEvalData(evalRes.value);
-        }
+        const statsRes = await api.getDashboardStats();
+        setStats(statsRes);
       } catch (err) {
-        setError(err.message);
+        setError(err.message || 'Failed to load dashboard data.');
       } finally {
         setLoading(false);
       }
     }
     loadData();
-  }, []);
+  }, [isAdmin]);
 
   return (
-    <div className="space-y-8">
-      {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 p-6 sm:p-8 text-white shadow-xl">
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold mb-4 border border-blue-400/30">
+    <div className="space-y-8 max-w-7xl mx-auto">
+      {/* Top Welcome & Quick Actions Bar */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-200/80">
+        <div>
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            AI-Driven Educational Assessment System
+            <span>
+              {isAdmin ? 'System Administrator Portal' : 'Faculty Assessment Operations'}
+            </span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Automated Question Paper Generation System
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+            {isAdmin ? 'ExamForge AI Administration' : `Welcome, ${user?.full_name || 'Faculty Member'}`}
           </h2>
-          <p className="mt-2 text-sm sm:text-base text-slate-300">
-            CBSE & State Board compliant test paper generator mapped across six Bloom's Taxonomy cognitive dimensions and calibrated difficulty levels.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Tamil Nadu State Board / Samacheer Kalvi Automated Assessment System (Classes 6–12).
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Link
+            to="/question-bank"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold border border-slate-200 shadow-xs transition-colors cursor-pointer"
+          >
+            <Database className="w-3.5 h-3.5 text-slate-500" />
+            <span>Question Bank</span>
+          </Link>
+          <Link
+            to="/generate-paper"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm shadow-blue-600/30 transition-all cursor-pointer"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>Generate Examination</span>
+          </Link>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-rose-800 text-xs font-medium">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 1. ADMINISTRATOR DASHBOARD VIEW                                       */}
+      {/* ===================================================================== */}
+      {isAdmin ? (
+        <div className="space-y-6">
+          {/* Admin Telemetry Bento Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                <span>Faculty Accounts</span>
+                <Users className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="text-3xl font-bold font-mono text-slate-900">
+                {stats?.staff_count || 0}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Authorized teaching staff
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                <span>Tamil Nadu Question Bank</span>
+                <Database className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-3xl font-bold font-mono text-slate-900">
+                {stats?.total_tn_questions || 0}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Classes 6 to 12 verified items
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                <span>CSV Datasets Ingested</span>
+                <FolderUp className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div className="text-3xl font-bold font-mono text-slate-900">
+                {stats?.dataset_uploads_count || 0}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Validated past papers
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                <span>Papers Generated</span>
+                <FileText className="w-4 h-4 text-amber-600" />
+              </div>
+              <div className="text-3xl font-bold font-mono text-slate-900">
+                {stats?.papers_generated || 0}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Formal examination papers
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Management Links */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link
+              to="/admin/staff"
+              className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition-all group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 mb-1">Staff Management</h3>
+              <p className="text-xs text-slate-500">
+                Add faculty members, configure subject assignments, and manage access credentials.
+              </p>
+            </Link>
+
+            <Link
+              to="/admin/datasets"
+              className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition-all group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <FolderUp className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 mb-1">Dataset Management</h3>
+              <p className="text-xs text-slate-500">
+                Upload CSV question papers, map schema columns, deduplicate, and run validation audits.
+              </p>
+            </Link>
+
+            <Link
+              to="/admin/models"
+              className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition-all group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <Cpu className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-slate-900 mb-1">Model Training (Random Forest)</h3>
+              <p className="text-xs text-slate-500">
+                Train TF-IDF + Random Forest pipelines, review held-out test metrics and activate versioned artifacts.
+              </p>
+            </Link>
+          </div>
+
+          {/* Active Models & Recent Activity */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Active Model Status */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-blue-600" />
+                <span>Active Production Models (Random Forest)</span>
+              </h3>
+
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">Bloom's Taxonomy Classifier</div>
+                    <div className="text-[11px] text-slate-500">
+                      Version: {stats?.active_models?.bloom?.version || 'Default Active Pipeline'}
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Live
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">Difficulty Classifier</div>
+                    <div className="text-[11px] text-slate-500">
+                      Version: {stats?.active_models?.difficulty?.version || 'Default Active Pipeline'}
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    Live
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <Link
+                  to="/admin/models"
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                >
+                  <span>View full evaluation reports & confusion matrices</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Recent Administrative Audit Logs */}
+            <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <History className="w-4 h-4 text-slate-600" />
+                <span>Recent System Activity</span>
+              </h3>
+
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {(stats?.recent_activity || []).length === 0 ? (
+                  <div className="text-xs text-slate-400 italic">No recent activity logged.</div>
+                ) : (
+                  stats.recent_activity.map((act) => (
+                    <div
+                      key={act.id}
+                      className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <div className="font-semibold text-slate-800 font-mono text-[11px]">{act.action}</div>
+                        <div className="text-[10px] text-slate-400">{act.user_email || 'System'}</div>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {act.created_at ? new Date(act.created_at).toLocaleTimeString() : ''}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ===================================================================== */
+        /* 2. TEACHER DASHBOARD VIEW (ZERO ACCURACY CARDS / ZERO MODEL REPORTS)  */
+        /* ===================================================================== */
+        <div className="space-y-6">
+          {/* Teacher Stats Bento Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                <span>My Generated Papers</span>
+                <FileText className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="text-3xl font-bold font-mono text-slate-900">
+                {stats?.papers_generated_by_user || 0}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Examination blueprints created by you
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                <span>TN State Board Question Bank</span>
+                <Database className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div className="text-3xl font-bold font-mono text-slate-900">
+                {stats?.total_questions_available || 0}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Classes 6–12 syllabus items
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                <span>Verified Classes</span>
+                <BookOpen className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div className="text-3xl font-bold font-mono text-slate-900">
+                7
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Classes 6, 7, 8, 9, 10, 11, and 12
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Start Action Card */}
+          <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-600/15 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold">Generate a Question Paper Now</h3>
+              <p className="text-xs text-blue-100 max-w-xl">
+                Choose class from 6 to 12, select your subject and textbook chapters, configure total marks and cognitive distribution, and download a printable A4 examination PDF.
+              </p>
+            </div>
             <Link
               to="/generate-paper"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm transition-colors shadow-md shadow-purple-600/30 cursor-pointer"
+              className="px-5 py-3 rounded-xl bg-white text-blue-700 hover:bg-blue-50 font-semibold text-xs transition-colors shrink-0 flex items-center gap-2 cursor-pointer shadow-md"
             >
-              Generate Question Paper
+              <span>Launch Paper Generator</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link
-              to="/question-bank"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 font-medium text-sm transition-colors border border-slate-700 cursor-pointer"
-            >
-              <Database className="w-4 h-4" />
-              Explore Question Bank
-            </Link>
           </div>
-        </div>
-      </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Questions</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Database className="w-4 h-4" />
+          {/* Recent Papers Table (Teacher-Scoped) */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200/80 bg-slate-50/50 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-slate-900">My Recent Examination Papers</h3>
+              <Link to="/history" className="text-xs font-semibold text-blue-600 hover:text-blue-700">
+                View All History
+              </Link>
             </div>
-          </div>
-          <div className="mt-3 text-2xl font-bold text-slate-900">
-            {stats ? stats.total_questions?.toLocaleString() : '...'}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">Verified and categorized</p>
-        </div>
 
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Subjects</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <BookOpen className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 text-2xl font-bold text-slate-900">
-            {stats ? stats.subjects?.length : '...'}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">Physics, Chemistry, Maths & CS</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Bloom Classifier</span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${stats?.models_status?.bloom_trained ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-              <Cpu className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 text-2xl font-bold text-slate-900">
-            {stats?.models_status?.bloom_trained ? 'Active' : 'Unloaded'}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">TF-IDF + Logistic Regression</p>
-        </div>
-
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Papers Generated</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-              <FileText className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 text-2xl font-bold text-slate-900">
-            {stats ? stats.generated_papers_count : '...'}
-          </div>
-          <p className="mt-1 text-xs text-slate-500">Persisted in database</p>
-        </div>
-      </div>
-
-      {/* End-to-End Workflow Architecture */}
-      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs">
-        <h3 className="text-base font-semibold text-slate-900 mb-1">
-          System Workflow Architecture
-        </h3>
-        <p className="text-xs text-slate-500 mb-6">
-          How questions flow from raw data through machine learning classification to finalized question papers.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center mb-3">1</div>
-            <h4 className="font-semibold text-sm text-slate-900">Dataset ETL</h4>
-            <p className="text-xs text-slate-600 mt-1">Normalized labels, deduplicated items, verified schema.</p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center mb-3">2</div>
-            <h4 className="font-semibold text-sm text-slate-900">ML Classification</h4>
-            <p className="text-xs text-slate-600 mt-1">Bloom's 6 levels + 3-tier difficulty predicted via NLP.</p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 font-bold text-xs flex items-center justify-center mb-3">3</div>
-            <h4 className="font-semibold text-sm text-slate-900">Constraint Selection</h4>
-            <p className="text-xs text-slate-600 mt-1">Exact marks sum validation and cognitive distribution enforcement.</p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-            <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center mb-3">4</div>
-            <h4 className="font-semibold text-sm text-slate-900">PDF Compilation</h4>
-            <p className="text-xs text-slate-600 mt-1">ReportLab high-fidelity print paper with teacher analytics summary.</p>
+            {loading ? (
+              <div className="p-8 text-center text-xs text-slate-400">Loading your examination papers...</div>
+            ) : (stats?.recent_papers || []).length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-400">
+                You have not generated any examination papers yet.{' '}
+                <Link to="/generate-paper" className="text-blue-600 underline ml-1">
+                  Generate your first paper
+                </Link>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 text-[10px] uppercase text-slate-500 font-bold border-b border-slate-200">
+                      <th className="py-3 px-6">Examination Title</th>
+                      <th className="py-3 px-4">Class</th>
+                      <th className="py-3 px-4">Subject</th>
+                      <th className="py-3 px-4">Questions</th>
+                      <th className="py-3 px-4">Total Marks</th>
+                      <th className="py-3 px-6 text-right">PDF Download</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {stats.recent_papers.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50/50">
+                        <td className="py-3 px-6 font-semibold text-slate-900">{p.title}</td>
+                        <td className="py-3 px-4 text-slate-600">{p.class_grade}</td>
+                        <td className="py-3 px-4 text-slate-600">{p.subject}</td>
+                        <td className="py-3 px-4 font-mono">{p.num_questions}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-blue-600">{p.total_marks}</td>
+                        <td className="py-3 px-6 text-right">
+                          <a
+                            href={api.getPaperDownloadUrl(p.id)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold transition-colors cursor-pointer text-xs"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>PDF</span>
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

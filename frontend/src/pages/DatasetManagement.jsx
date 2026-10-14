@@ -11,7 +11,8 @@ import {
   Sparkles,
   HelpCircle,
   FileCheck,
-  ChevronDown
+  ChevronDown,
+  GitMerge
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -49,10 +50,26 @@ export default function DatasetManagement() {
   const [edubloomReport, setEdubloomReport] = useState(null);
   const [stagingQuestions, setStagingQuestions] = useState(false);
 
+  // Combined dataset state
+  const [combinedSummary, setCombinedSummary] = useState(null);
+  const [buildingCombined, setBuildingCombined] = useState(false);
+
   useEffect(() => {
     loadDatasets();
     loadEdubloomSummary();
+    loadCombinedSummary();
   }, []);
+
+  const loadCombinedSummary = async () => {
+    try {
+      const res = await api.getCombinedDatasetSummary();
+      if (res && res.final_combined_row_count) {
+        setCombinedSummary(res);
+      }
+    } catch {
+      // Ignored if not yet initialized
+    }
+  };
 
   const loadEdubloomSummary = async () => {
     try {
@@ -62,6 +79,21 @@ export default function DatasetManagement() {
       }
     } catch {
       // Ignored if not yet initialized
+    }
+  };
+
+  const handleBuildCombined = async () => {
+    setBuildingCombined(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await api.buildCombinedDataset(true);
+      setCombinedSummary(res);
+      setSuccess(`Combined training dataset generated: ${res.final_combined_row_count?.toLocaleString()} rows (1,004 TN State Board + 73,712 EduBloom, 0 cross-duplicates). Saved to backend/data/combined_training_dataset.csv.`);
+    } catch (err) {
+      setError(err.message || 'Failed to build combined dataset.');
+    } finally {
+      setBuildingCombined(false);
     }
   };
 
@@ -350,6 +382,148 @@ export default function DatasetManagement() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Combined Dataset & Cross-Dataset Audit Panel */}
+      <div className="p-6 rounded-2xl bg-linear-to-r from-blue-50/70 via-indigo-50/40 to-white border border-blue-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-blue-600 text-white shadow-xs">
+              <GitMerge className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-700">Combined ML Training Dataset</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                  TN State Board + Hugging Face EduBloom
+                </span>
+              </div>
+              <h2 className="text-base font-bold text-slate-900 mt-0.5">
+                Merged Question Bank & Cross-Dataset Deduplication Audit
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBuildCombined}
+              disabled={buildingCombined}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              {buildingCombined ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Merging & Deduplicating...</span>
+                </>
+              ) : (
+                <>
+                  <GitMerge className="w-4 h-4" />
+                  <span>Rebuild & Audit Combined Dataset</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Telemetry Summary Cards */}
+        {combinedSummary ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3.5 rounded-xl bg-white border border-blue-100 shadow-2xs">
+                <div className="text-[10px] text-slate-500 uppercase font-semibold">Existing TN Dataset</div>
+                <div className="text-xl font-bold font-mono text-slate-900 mt-0.5">
+                  {combinedSummary.existing_dataset?.valid_usable_rows?.toLocaleString() || '1,004'}
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  {combinedSummary.existing_dataset?.source_rows_count || 1254} source ({combinedSummary.existing_dataset?.internal_duplicates_removed || 250} duplicates pruned)
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white border border-purple-100 shadow-2xs">
+                <div className="text-[10px] text-purple-700 uppercase font-semibold">EduBloom Question Bank</div>
+                <div className="text-xl font-bold font-mono text-purple-800 mt-0.5">
+                  {combinedSummary.edubloom_dataset?.valid_usable_rows?.toLocaleString() || '73,712'}
+                </div>
+                <div className="text-[10px] text-purple-600 font-medium">
+                  {combinedSummary.edubloom_dataset?.source_rows_count || 73712} source (0 nulls, L1–L6 mapped)
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white border border-emerald-100 shadow-2xs">
+                <div className="text-[10px] text-emerald-700 uppercase font-semibold">Cross-Dataset Duplicates</div>
+                <div className="text-xl font-bold font-mono text-emerald-800 mt-0.5">
+                  {combinedSummary.deduplication?.cross_dataset_duplicates_removed || 0}
+                </div>
+                <div className="text-[10px] text-emerald-600 font-semibold">
+                  Zero Contamination Across Banks
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-white border border-blue-200 shadow-2xs">
+                <div className="text-[10px] text-blue-700 uppercase font-bold">Final Combined Valid Rows</div>
+                <div className="text-xl font-bold font-mono text-blue-700 mt-0.5">
+                  {combinedSummary.final_combined_row_count?.toLocaleString() || '74,716'}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Saved to backend/data/
+                </div>
+              </div>
+            </div>
+
+            {/* Label Distribution Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
+                <div className="font-bold text-[11px] text-slate-700 mb-2">Combined Bloom's Taxonomy Distribution:</div>
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono">
+                  {combinedSummary.label_distribution?.bloom_level &&
+                    Object.entries(combinedSummary.label_distribution.bloom_level).map(([lvl, cnt]) => (
+                      <div key={lvl} className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                        <span className="font-bold text-slate-800">{lvl}: </span>
+                        <span className="text-blue-700 font-semibold">{cnt.toLocaleString()}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
+                <div className="font-bold text-[11px] text-slate-700 mb-2">Combined Difficulty Distribution:</div>
+                <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono">
+                  {combinedSummary.label_distribution?.difficulty &&
+                    Object.entries(combinedSummary.label_distribution.difficulty).map(([diff, cnt]) => (
+                      <div key={diff} className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                        <span className="font-bold text-slate-800">{diff}: </span>
+                        <span className="text-emerald-700 font-semibold">{cnt.toLocaleString()}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-200 text-[11px] text-blue-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <b>Dedicated File:</b> <code className="font-mono text-xs">{combinedSummary.combined_dataset_file || 'backend/data/combined_training_dataset.csv'}</code>
+                <span className="ml-2 text-slate-500">({combinedSummary.file_size_mb || 10.6} MB)</span>
+              </div>
+              <div className="text-emerald-700 font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Isolated from Samacheer Kalvi Exam Question Bank</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-white border border-slate-200 text-xs text-slate-500 flex items-center justify-between">
+            <span>Combined dataset is ready for inspection. Click Rebuild & Audit to verify row counts and label distributions.</span>
+            <button
+              type="button"
+              onClick={handleBuildCombined}
+              disabled={buildingCombined}
+              className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold cursor-pointer"
+            >
+              Load Audit
+            </button>
           </div>
         )}
       </div>

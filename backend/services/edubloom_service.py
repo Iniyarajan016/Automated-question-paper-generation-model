@@ -15,6 +15,7 @@ Key Safety Principles:
 
 import os
 import sys
+import re
 import json
 import pandas as pd
 import numpy as np
@@ -26,9 +27,12 @@ from config import Config
 from database.db import SessionLocal
 from database.models import Question, DatasetUpload, AuditLog
 
-# Path to the primary EduBloom dataset file
+# Path constants for datasets and reports
 EDUBLOOM_CSV_PATH = os.path.join(Config.DATA_DIR, 'questions_dataset.csv')
 EDUBLOOM_REPORT_PATH = os.path.join(Config.REPORTS_DIR, 'edubloom_validation_report.json')
+EXISTING_DATASET_CSV = os.path.join(Config.DATA_DIR, 'tamilnadu_state_board_sample.csv')
+COMBINED_CSV_PATH = os.path.join(Config.DATA_DIR, 'combined_training_dataset.csv')
+COMBINED_MANIFEST_PATH = os.path.join(Config.REPORTS_DIR, 'combined_dataset_manifest.json')
 
 # Standard target taxonomy
 BLOOM_LEVELS = Config.BLOOM_LEVELS  # ['Remember', 'Understand', 'Apply', 'Analyze', 'Evaluate', 'Create']
@@ -370,3 +374,309 @@ def optionally_stage_edubloom_into_db(
         return {'success': False, 'error': str(e)}
     finally:
         db.close()
+
+
+def normalize_text_for_dedup(text: str) -> str:
+    """Normalizes question text for duplicate and template collision detection."""
+    if not text or pd.isna(text):
+        return ""
+    cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', str(text).lower())
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
+
+def ensure_edubloom_dataset_available(csv_path: str = None) -> str:
+    """
+    Ensures EduBloom dataset is present locally; downloads from Hugging Face if missing.
+    """
+    path = csv_path or EDUBLOOM_CSV_PATH
+    if not os.path.exists(path):
+        from data.download_dataset import (
+            download_huggingface_dataset,
+            save_dataset_and_report,
+            clean_and_normalize,
+            inspect_schema_and_columns
+        )
+        print(f"EduBloom dataset not found at '{path}'. Downloading from Hugging Face...")
+        df_raw = download_huggingface_dataset("Uzaib52/edubloom-question-bank")
+        col_mapping, missing_dict = inspect_schema_and_columns(df_raw)
+        df_cleaned, cleaning_stats = clean_and_normalize(df_raw, col_mapping)
+        save_dataset_and_report(df_cleaned, cleaning_stats, missing_dict, list(df_raw.columns))
+    return path
+
+
+def build_combined_training_dataset(
+    force_rebuild: bool = False,
+    existing_csv_path: str = None,
+    edubloom_csv_path: str = None,
+    user_id: int = None
+) -> dict:
+    """
+    Constructs, normalizes, deduplicates, and validates the combined dataset:
+    Existing Tamil Nadu State Board questions + Hugging Face EduBloom question bank.
+
+    Schema:
+    question_id, question, subject, topic, bloom_level, question_type, difficulty, source, board, verified
+
+    Guarantees:
+    - Never overwrites original source datasets (tamilnadu_state_board_sample.csv, questions_dataset.csv).
+    - Never modifies or pollutes the production Tamil Nadu State Board question bank in the DB.
+    - Resolves cross-dataset duplicate questions by preserving the existing TN State Board question.
+    - Saves combined data to backend/data/combined_training_dataset.csv.
+    - Saves audit manifest to backend/reports/combined_dataset_manifest.json.
+    """
+    os.makedirs(Config.DATA_DIR, exist_ok=True)
+    os.makedirs(Config.REPORTS_DIR, exist_ok=True)
+
+    if not force_rebuild and os.path.exists(COMBINED_CSV_PATH) and os.path.exists(COMBINED_MANIFEST_PATH):
+        try:
+            with open(COMBINED_MANIFEST_PATH, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+            return manifest
+        except Exception:
+            pass  # Fall through to rebuild
+
+    # 1. Load Existing Dataset
+    existing_path = existing_csv_path or EXISTING_DATASET_CSV
+    db = SessionLocal()
+    try:
+        if os.path.exists(existing_path):
+            df_existing_raw = pd.read_csv(existing_path)
+        else:
+            tn_questions = db.query(Question).filter(
+                (Question.board == 'Tamil Nadu State Board') | (Question.board.is_(None))
+            ).all()
+            df_existing_raw = pd.DataFrame([q.to_dict() for q in tn_questions])
+    finally:
+        db.close()
+
+    existing_orig_count = len(df_existing_raw)
+
+    # 2. Ensure EduBloom dataset is available & load
+    eb_path = ensure_edubloom_dataset_available(edubloom_csv_path)
+    df_eb_raw = pd.read_csv(eb_path)
+    eb_orig_count = len(df_eb_raw)
+
+    # 3. Clean and normalize Existing Dataset
+    df_existing = df_existing_raw.copy()
+    valid_q_existing = df_existing['question'].notna() & (df_existing['question'].astype(str).str.strip() != '') & (df_existing['question'].astype(str).str.strip().str.lower() != 'nan')
+    existing_rej_empty_q = int((~valid_q_existing).sum())
+    df_existing = df_existing[valid_q_existing].copy()
+
+    # Map labels for existing dataset
+    df_existing['bloom_level'] = df_existing['bloom_level'].astype(str).str.strip().str.lower().map(L_CODE_TO_BLOOM)
+    valid_b_existing = df_existing['bloom_level'].isin(BLOOM_LEVELS)
+    existing_rej_bloom = int((~valid_b_existing).sum())
+    df_existing = df_existing[valid_b_existing].copy()
+
+    df_existing['difficulty'] = df_existing['difficulty'].astype(str).str.strip().str.lower().map(DIFFICULTY_MAP)
+    valid_d_existing = df_existing['difficulty'].isin(DIFFICULTY_LEVELS)
+    existing_rej_diff = int((~valid_d_existing).sum())
+    df_existing = df_existing[valid_d_existing].copy()
+
+    # Standardize columns
+    target_cols = ['question_id', 'question', 'subject', 'topic', 'bloom_level', 'question_type', 'difficulty', 'source', 'board', 'verified']
+    for c in target_cols:
+        if c not in df_existing.columns:
+            if c == 'board':
+                df_existing[c] = 'Tamil Nadu State Board'
+            elif c == 'verified':
+                df_existing[c] = True
+            elif c == 'source':
+                df_existing[c] = 'Tamil Nadu State Board Question Bank'
+            elif c == 'question_type':
+                df_existing[c] = 'Short Answer'
+            else:
+                df_existing[c] = None
+
+    # Deduplicate existing dataset by normalized text
+    df_existing['norm_text'] = df_existing['question'].apply(normalize_text_for_dedup)
+    existing_before_dedup = len(df_existing)
+    df_existing = df_existing.drop_duplicates(subset=['norm_text'], keep='first').copy()
+    existing_duplicates_pruned = existing_before_dedup - len(df_existing)
+    existing_valid_count = len(df_existing)
+
+    # 4. Clean and normalize EduBloom Dataset
+    df_eb = df_eb_raw.copy()
+    valid_q_eb = df_eb['question'].notna() & (df_eb['question'].astype(str).str.strip() != '') & (df_eb['question'].astype(str).str.strip().str.lower() != 'nan')
+    eb_rej_empty_q = int((~valid_q_eb).sum())
+    df_eb = df_eb[valid_q_eb].copy()
+
+    # Map L1-L6
+    df_eb['bloom_level'] = df_eb['bloom_level'].astype(str).str.strip().str.lower().map(L_CODE_TO_BLOOM)
+    valid_b_eb = df_eb['bloom_level'].isin(BLOOM_LEVELS)
+    eb_rej_bloom = int((~valid_b_eb).sum())
+    df_eb = df_eb[valid_b_eb].copy()
+
+    # Map Difficulty
+    df_eb['difficulty'] = df_eb['difficulty'].astype(str).str.strip().str.lower().map(DIFFICULTY_MAP)
+    valid_d_eb = df_eb['difficulty'].isin(DIFFICULTY_LEVELS)
+    eb_rej_diff = int((~valid_d_eb).sum())
+    df_eb = df_eb[valid_d_eb].copy()
+
+    # Set provenance for EduBloom
+    df_eb['board'] = 'General / EduBloom'
+    df_eb['verified'] = False
+    df_eb['source'] = 'EduBloom Question Bank (Hugging Face)'
+    for c in target_cols:
+        if c not in df_eb.columns:
+            df_eb[c] = None
+
+    # Deduplicate EduBloom dataset by normalized text
+    df_eb['norm_text'] = df_eb['question'].apply(normalize_text_for_dedup)
+    eb_before_dedup = len(df_eb)
+    df_eb = df_eb.drop_duplicates(subset=['norm_text'], keep='first').copy()
+    eb_duplicates_pruned = eb_before_dedup - len(df_eb)
+    eb_valid_count = len(df_eb)
+
+    # 5. Cross-dataset deduplication:
+    # If a question exists in both, keep the Existing TN State Board question
+    existing_norm_set = set(df_existing['norm_text'])
+    cross_duplicates_mask = df_eb['norm_text'].isin(existing_norm_set)
+    cross_duplicates_count = int(cross_duplicates_mask.sum())
+    df_eb_clean = df_eb[~cross_duplicates_mask].copy()
+
+    # 6. Combine datasets
+    df_combined = pd.concat([
+        df_existing[target_cols],
+        df_eb_clean[target_cols]
+    ], ignore_index=True)
+
+    final_combined_count = len(df_combined)
+
+    # 7. Distribution Metrics
+    combined_bloom_dist = {
+        lvl: int((df_combined['bloom_level'] == lvl).sum()) for lvl in BLOOM_LEVELS
+    }
+    combined_diff_dist = {
+        diff: int((df_combined['difficulty'] == diff).sum()) for diff in DIFFICULTY_LEVELS
+    }
+
+    # 8. Add explicit State Board provenance flag and save CSV
+    df_combined['is_tn_state_board'] = (df_combined['board'] == 'Tamil Nadu State Board')
+    df_combined.to_csv(COMBINED_CSV_PATH, index=False, encoding='utf-8')
+
+    manifest = {
+        'success': True,
+        'combined_csv_path': COMBINED_CSV_PATH,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'datasets': {
+            'existing_dataset': {
+                'name': 'Tamil Nadu State Board Question Bank (Samacheer Kalvi)',
+                'source_file': existing_path,
+                'original_rows': existing_orig_count,
+                'valid_rows': existing_valid_count,
+                'rejected_rows': existing_rej_empty_q + existing_rej_bloom + existing_rej_diff,
+                'duplicates_pruned': existing_duplicates_pruned,
+                'rejection_breakdown': {
+                    'empty_question': existing_rej_empty_q,
+                    'unmapped_bloom': existing_rej_bloom,
+                    'unmapped_difficulty': existing_rej_diff,
+                    'duplicates': existing_duplicates_pruned
+                }
+            },
+            'edubloom_dataset': {
+                'name': 'Hugging Face EduBloom Question Bank (Uzaib52/edubloom-question-bank)',
+                'source_file': eb_path,
+                'original_rows': eb_orig_count,
+                'valid_rows': eb_valid_count,
+                'rejected_rows': eb_rej_empty_q + eb_rej_bloom + eb_rej_diff,
+                'duplicates_pruned': eb_duplicates_pruned,
+                'cross_dataset_duplicates_pruned': cross_duplicates_count,
+                'rejection_breakdown': {
+                    'empty_question': eb_rej_empty_q,
+                    'unmapped_bloom': eb_rej_bloom,
+                    'unmapped_difficulty': eb_rej_diff,
+                    'internal_duplicates': eb_duplicates_pruned,
+                    'cross_dataset_duplicates': cross_duplicates_count
+                }
+            }
+        },
+        'summary': {
+            'total_source_rows': existing_orig_count + eb_orig_count,
+            'existing_valid_rows': existing_valid_count,
+            'edubloom_valid_rows': eb_valid_count - cross_duplicates_count,
+            'total_rejected_rows': (existing_rej_empty_q + existing_rej_bloom + existing_rej_diff) + (eb_rej_empty_q + eb_rej_bloom + eb_rej_diff),
+            'total_duplicates_pruned': existing_duplicates_pruned + eb_duplicates_pruned + cross_duplicates_count,
+            'final_combined_valid_rows': final_combined_count
+        },
+        'final_combined_row_count': final_combined_count,
+        'existing_dataset': {
+            'name': 'Tamil Nadu State Board Question Bank (Samacheer Kalvi)',
+            'source_rows_count': existing_orig_count,
+            'valid_usable_rows': existing_valid_count,
+            'rejected_rows': existing_rej_empty_q + existing_rej_bloom + existing_rej_diff,
+            'internal_duplicates_removed': existing_duplicates_pruned
+        },
+        'edubloom_dataset': {
+            'name': 'Hugging Face EduBloom Question Bank (Uzaib52/edubloom-question-bank)',
+            'source_rows_count': eb_orig_count,
+            'valid_usable_rows': eb_valid_count - cross_duplicates_count,
+            'rejected_rows': eb_rej_empty_q + eb_rej_bloom + eb_rej_diff,
+            'internal_duplicates_removed': eb_duplicates_pruned
+        },
+        'deduplication': {
+            'cross_dataset_duplicates_removed': cross_duplicates_count,
+            'existing_internal_duplicates_removed': existing_duplicates_pruned,
+            'edubloom_internal_duplicates_removed': eb_duplicates_pruned,
+            'total_duplicates_removed': existing_duplicates_pruned + eb_duplicates_pruned + cross_duplicates_count
+        },
+        'provenance': {
+            'tamil_nadu_state_board_rows': int((df_combined['board'] == 'Tamil Nadu State Board').sum()),
+            'general_edubloom_rows': int((df_combined['board'] == 'General / EduBloom').sum())
+        },
+        'label_distributions': {
+            'bloom_level': combined_bloom_dist,
+            'difficulty': combined_diff_dist
+        },
+        'isolation_policy': {
+            'tamil_nadu_state_board_exclusive': True,
+            'note': 'General EduBloom questions have board="General / EduBloom" and verified=False; they are never selected for Tamil Nadu State Board examination papers.'
+        }
+    }
+
+    with open(COMBINED_MANIFEST_PATH, 'w', encoding='utf-8') as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+    # Optional Audit log
+    if user_id:
+        db_audit = SessionLocal()
+        try:
+            log_entry = AuditLog(
+                user_id=user_id,
+                action="BUILD_COMBINED_DATASET",
+                entity_type="Dataset",
+                entity_id="combined_training_dataset",
+                details={
+                    'final_rows': final_combined_count,
+                    'existing_rows': existing_valid_count,
+                    'edubloom_rows': eb_valid_count - cross_duplicates_count
+                }
+            )
+            db_audit.add(log_entry)
+            db_audit.commit()
+        finally:
+            db_audit.close()
+
+    return manifest
+
+
+def get_combined_dataset_path() -> str:
+    """
+    Returns the absolute path to the combined training dataset CSV.
+    """
+    return COMBINED_CSV_PATH
+
+
+def get_combined_dataset_summary() -> dict:
+    """
+    Returns summary statistics for the existing, EduBloom, and combined datasets.
+    """
+    if os.path.exists(COMBINED_MANIFEST_PATH):
+        try:
+            with open(COMBINED_MANIFEST_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    return build_combined_training_dataset(force_rebuild=False)
+

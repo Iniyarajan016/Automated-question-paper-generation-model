@@ -375,5 +375,32 @@ export const api = {
       headers: getAuthHeaders()
     });
     return handleResponse(res);
+  },
+
+  // Admin: Combined Training Dataset & Candidate Models
+  async buildCombinedDataset(forceRebuild = true) {
+    const res = await fetch(`${API_BASE}/admin/datasets/merge-combined`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ force_rebuild: forceRebuild })
+    });
+    return handleResponse(res);
+  },
+
+  async getCombinedDatasetSummary() {
+    const res = await fetch(`${API_BASE}/admin/datasets/combined-summary`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async trainCombinedCandidateModel(payload = {}) {
+    const res = await fetch(`${API_BASE}/admin/combined/train-candidate`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
   }
 };
+

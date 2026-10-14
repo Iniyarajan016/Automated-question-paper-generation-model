@@ -24,9 +24,17 @@ from database.models import User, Question, ModelVersion
 from services.edubloom_service import (
     inspect_and_validate_edubloom_dataset,
     get_edubloom_clean_dataframe,
-    optionally_stage_edubloom_into_db
+    optionally_stage_edubloom_into_db,
+    build_combined_training_dataset,
+    get_combined_dataset_summary,
+    get_combined_dataset_path
 )
-from ml.random_forest_trainer import train_edubloom_candidate_model, activate_version
+from ml.random_forest_trainer import (
+    train_edubloom_candidate_model,
+    train_combined_candidate_model,
+    clean_template_leakage,
+    activate_version
+)
 
 
 class TestEduBloomPipeline(unittest.TestCase):
@@ -208,6 +216,146 @@ class TestEduBloomPipeline(unittest.TestCase):
         self.assertFalse(data_train['is_active'])
         self.assertTrue(data_train['promotion_required'])
 
+    # Requirement 7: Combined Dataset Normalization, Deduplication, and Manifest
+    def test_07_combined_dataset_build_and_deduplication(self):
+        manifest = build_combined_training_dataset(force_rebuild=False)
+        self.assertTrue(manifest['success'])
+        self.assertEqual(manifest['final_combined_row_count'], 74716)
+        self.assertEqual(manifest['existing_dataset']['source_rows_count'], 1254)
+        self.assertEqual(manifest['existing_dataset']['valid_usable_rows'], 1004)
+        self.assertEqual(manifest['existing_dataset']['internal_duplicates_removed'], 250)
+        self.assertEqual(manifest['edubloom_dataset']['valid_usable_rows'], 73712)
+        self.assertEqual(manifest['deduplication']['cross_dataset_duplicates_removed'], 0)
+
+        # Verify combined CSV on disk
+        csv_path = get_combined_dataset_path()
+        self.assertTrue(os.path.exists(csv_path))
+        df = pd.read_csv(csv_path)
+        self.assertEqual(len(df), 74716)
+
+        # Verify target schema columns
+        required_schema = ['question_id', 'question', 'subject', 'topic', 'bloom_level', 'question_type', 'difficulty', 'source', 'is_tn_state_board']
+        for col in required_schema:
+            self.assertIn(col, df.columns)
+
+        # Verify TN State Board isolation flag
+        tn_mask = df['is_tn_state_board'] == True
+        self.assertEqual(tn_mask.sum(), 1004)
+        self.assertEqual((~tn_mask).sum(), 73712)
+
+        # Verify Bloom and Difficulty distributions
+        self.assertTrue(df['bloom_level'].isin(Config.BLOOM_LEVELS).all())
+        self.assertTrue(df['difficulty'].isin(Config.DIFFICULTY_LEVELS).all())
+
+    # Requirement 8: Template Leakage Prevention Grouping
+    def test_08_template_leakage_grouping(self):
+        mock_df = pd.DataFrame({
+            'question': [
+                'What is the structure of plant cell in detail?',
+                'What is the structure of animal cell in detail?',
+                'Explain Newton second law with an experiment',
+                'Explain Newton third law with an experiment'
+            ],
+            'bloom_level': ['Understand', 'Understand', 'Apply', 'Apply']
+        })
+        fp_df = clean_template_leakage(mock_df)
+        self.assertIn('template_fp', fp_df.columns)
+        # Verify first words and last words fingerprint
+        self.assertEqual(len(fp_df['template_fp']), 4)
+
+    # Requirement 9: Combined Candidate Training (Bloom + Difficulty)
+    def test_09_train_combined_candidate_model_both_tasks(self):
+        # 1. Bloom Level candidate training
+        bloom_res = train_combined_candidate_model(
+            task_name='bloom_level',
+            sample_limit=120,
+            n_estimators=10
+        )
+        self.assertTrue(bloom_res['success'])
+        self.assertTrue(bloom_res['is_candidate'])
+        self.assertFalse(bloom_res['is_active'])
+        self.assertIn('candidate', bloom_res['version'])
+        self.assertEqual(bloom_res['evaluation']['template_leakage_overlap_count'], 0)
+        self.assertIsNotNone(bloom_res.get('tn_benchmark_evaluation'))
+
+        # 2. Difficulty candidate training
+        diff_res = train_combined_candidate_model(
+            task_name='difficulty',
+            sample_limit=120,
+            n_estimators=10
+        )
+        self.assertTrue(diff_res['success'])
+        self.assertTrue(diff_res['is_candidate'])
+        self.assertFalse(diff_res['is_active'])
+        self.assertIn('candidate', diff_res['version'])
+        self.assertEqual(diff_res['evaluation']['template_leakage_overlap_count'], 0)
+        self.assertIsNotNone(diff_res.get('tn_benchmark_evaluation'))
+
+    # Requirement 10: Admin Combined API Endpoints & RBAC Denial for Teachers
+    def test_10_admin_combined_api_endpoints_and_rbac(self):
+        t_token = self._get_teacher_token()
+        t_headers = {'Authorization': f'Bearer {t_token}'}
+
+        # Teachers receive 403 Forbidden
+        r1 = self.client.post('/api/admin/datasets/merge-combined', headers=t_headers)
+        self.assertEqual(r1.status_code, 403)
+
+        r2 = self.client.get('/api/admin/datasets/combined-summary', headers=t_headers)
+        self.assertEqual(r2.status_code, 403)
+
+        r3 = self.client.post('/api/admin/combined/train-candidate', headers=t_headers, json={'task_name': 'bloom_level'})
+        self.assertEqual(r3.status_code, 403)
+
+        # Admins receive 200/201
+        a_token = self._get_admin_token()
+        a_headers = {'Authorization': f'Bearer {a_token}'}
+
+        r_sum = self.client.get('/api/admin/datasets/combined-summary', headers=a_headers)
+        self.assertEqual(r_sum.status_code, 200)
+        self.assertEqual(r_sum.get_json()['final_combined_row_count'], 74716)
+
+        r_train = self.client.post('/api/admin/combined/train-candidate', headers=a_headers, json={
+            'task_name': 'bloom_level',
+            'sample_limit': 60,
+            'n_estimators': 10
+        })
+        self.assertEqual(r_train.status_code, 201)
+        data = r_train.get_json()
+        self.assertTrue(data['is_candidate'])
+        self.assertFalse(data['is_active'])
+
+    # Requirement 11: Candidate Model Promotion Workflow
+    def test_11_candidate_model_promotion_and_isolation(self):
+        db = SessionLocal()
+        try:
+            active_bloom = db.query(ModelVersion).filter_by(task_name='bloom_level', is_active=True).first()
+            orig_active_id = active_bloom.id if active_bloom else None
+        finally:
+            db.close()
+
+        # Train a candidate
+        res = train_combined_candidate_model(task_name='bloom_level', sample_limit=60, n_estimators=10)
+        cand_id = res['model_id']
+
+        # Candidate is not active
+        self.assertFalse(res['is_active'])
+
+        # Explicit admin promotion action
+        promote_res = activate_version(cand_id)
+        self.assertTrue(promote_res['success'])
+
+        db2 = SessionLocal()
+        try:
+            promoted_model = db2.get(ModelVersion, cand_id)
+            self.assertTrue(promoted_model.is_active)
+        finally:
+            db2.close()
+
+        # Restore original active model if existed
+        if orig_active_id:
+            activate_version(orig_active_id)
+
 
 if __name__ == '__main__':
     unittest.main()
+

@@ -11,13 +11,16 @@ import {
   BarChart3,
   Layers,
   ShieldAlert,
-  Info
+  Info,
+  Sparkles,
+  GitMerge
 } from 'lucide-react';
 import { api } from '../services/api';
 
 export default function ModelTraining() {
   const [selectedTask, setSelectedTask] = useState('bloom_level');
-  const [trainingSource, setTrainingSource] = useState('db'); // 'db' or 'edubloom'
+  const [trainingSource, setTrainingSource] = useState('combined'); // 'db', 'combined', or 'edubloom'
+  const [combinedSampleLimit, setCombinedSampleLimit] = useState(10000);
   const [edubloomSampleLimit, setEdubloomSampleLimit] = useState(10000);
   const [validatingEdubloom, setValidatingEdubloom] = useState(false);
   const [edubloomValidation, setEdubloomValidation] = useState(null);
@@ -68,7 +71,15 @@ export default function ModelTraining() {
 
     try {
       let res;
-      if (trainingSource === 'edubloom') {
+      if (trainingSource === 'combined') {
+        res = await api.trainCombinedCandidateModel({
+          task_name: selectedTask,
+          sample_limit: combinedSampleLimit > 0 ? combinedSampleLimit : null,
+          n_estimators: nEstimators
+        });
+        setTrainingResult(res);
+        setSuccess(`Candidate Model "${res.version}" trained on Combined Dataset (${res.evaluation?.train_samples?.toLocaleString()} train, ${res.evaluation?.test_samples?.toLocaleString()} held-out test). Test Accuracy: ${(res.evaluation.test_accuracy * 100).toFixed(1)}%. Review comparison against active model below.`);
+      } else if (trainingSource === 'edubloom') {
         res = await api.trainEduBloomCandidateModel({
           task_name: selectedTask,
           sample_limit: edubloomSampleLimit > 0 ? edubloomSampleLimit : null,
@@ -156,6 +167,30 @@ export default function ModelTraining() {
             <label className="block text-xs font-bold text-slate-700 mb-1.5">Training Data Source</label>
             <div className="space-y-2">
               <label
+                onClick={() => setTrainingSource('combined')}
+                className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                  trainingSource === 'combined'
+                    ? 'border-indigo-600 bg-indigo-50/40 ring-1 ring-indigo-600/30'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="source"
+                  checked={trainingSource === 'combined'}
+                  onChange={() => setTrainingSource('combined')}
+                  className="mt-0.5 text-indigo-600"
+                />
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-900">Combined Dataset (TN Board + EduBloom)</span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-100 text-indigo-800">74,716 Items</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">1,004 TN unique + 73,712 EduBloom (Candidate Model, 0 template leakage)</div>
+                </div>
+              </label>
+
+              <label
                 onClick={() => setTrainingSource('db')}
                 className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
                   trainingSource === 'db'
@@ -201,6 +236,36 @@ export default function ModelTraining() {
               </label>
             </div>
           </div>
+
+          {/* Combined Dataset Controls */}
+          {trainingSource === 'combined' && (
+            <div className="p-3.5 rounded-xl bg-indigo-50/50 border border-indigo-200/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-900">Combined Dataset Configuration</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                  74,716 Valid Rows
+                </span>
+              </div>
+              <div className="text-[11px] text-indigo-800 space-y-1">
+                <div>• Grouped StratifiedGroupKFold on template fingerprints (0 leakage).</div>
+                <div>• Automatic benchmark evaluation on held-out TN State Board test set.</div>
+                <div>• Candidate models are saved as unpromoted (is_active=False).</div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-indigo-900 mb-1">Training Sample Limit</label>
+                <select
+                  value={combinedSampleLimit}
+                  onChange={(e) => setCombinedSampleLimit(Number(e.target.value))}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-indigo-200 bg-white"
+                >
+                  <option value="5000">5,000 Questions (Fast Evaluation)</option>
+                  <option value="10000">10,000 Questions (Balanced Candidate)</option>
+                  <option value="25000">25,000 Questions (Deep Candidate)</option>
+                  <option value="0">All 74,716 Questions (Full Exhaustive)</option>
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* EduBloom Specific Controls */}
           {trainingSource === 'edubloom' && (
@@ -321,7 +386,7 @@ export default function ModelTraining() {
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-500 space-y-1">
             <div className="font-semibold text-slate-700">Non-Destructive Promotion Policy:</div>
             <div>
-              {trainingSource === 'edubloom'
+              {trainingSource === 'combined' || trainingSource === 'edubloom'
                 ? 'Candidate models are saved with is_active=False and will NEVER replace live State Board models without explicit promotion.'
                 : 'Training runs strictly on an 80/20 held-out stratified split. Active models remain locked until admin activation.'}
             </div>
@@ -333,6 +398,8 @@ export default function ModelTraining() {
             className={`w-full py-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md ${
               training
                 ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                : trainingSource === 'combined'
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/20'
                 : trainingSource === 'edubloom'
                 ? 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20'
                 : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
@@ -341,12 +408,24 @@ export default function ModelTraining() {
             {training ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>{trainingSource === 'edubloom' ? 'Training Candidate Model...' : 'Fitting Random Forest Pipeline...'}</span>
+                <span>
+                  {trainingSource === 'combined'
+                    ? 'Fitting Candidate on Combined Data...'
+                    : trainingSource === 'edubloom'
+                    ? 'Training Candidate Model...'
+                    : 'Fitting Random Forest Pipeline...'}
+                </span>
               </>
             ) : (
               <>
                 <Play className="w-4 h-4 fill-current" />
-                <span>{trainingSource === 'edubloom' ? 'Train Candidate Random Forest Model' : 'Train Random Forest Model'}</span>
+                <span>
+                  {trainingSource === 'combined'
+                    ? 'Train Candidate on Combined Dataset'
+                    : trainingSource === 'edubloom'
+                    ? 'Train Candidate on EduBloom Data'
+                    : 'Train Random Forest Model'}
+                </span>
               </>
             )}
           </button>
@@ -356,14 +435,14 @@ export default function ModelTraining() {
         <div className="lg:col-span-2 space-y-6">
           {/* Candidate Comparison Telemetry Banner */}
           {trainingResult?.active_model_comparison && (
-            <div className="p-6 rounded-2xl bg-linear-to-r from-purple-50 via-white to-blue-50 border border-purple-200 shadow-sm space-y-4">
+            <div className="p-6 rounded-2xl bg-linear-to-r from-indigo-50/70 via-purple-50/50 to-white border border-indigo-200 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-purple-600 text-white shadow-xs">
+                  <div className="p-2 rounded-xl bg-indigo-600 text-white shadow-xs">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
                       Candidate Model Evaluation vs. Active Baseline
                     </div>
                     <h3 className="text-base font-bold text-slate-900">
@@ -376,7 +455,7 @@ export default function ModelTraining() {
                   <button
                     type="button"
                     onClick={() => handleActivate(trainingResult.model_id)}
-                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-600/20 cursor-pointer flex items-center gap-1.5 transition-colors"
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer flex items-center gap-1.5 transition-colors"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>Promote Candidate to Active</span>
@@ -387,8 +466,8 @@ export default function ModelTraining() {
               {/* Side-by-side delta cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div className="p-3 rounded-xl bg-white border border-slate-200/80 shadow-2xs">
-                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Test Accuracy</div>
-                  <div className="text-lg font-bold font-mono text-purple-700 mt-0.5">
+                  <div className="text-[10px] font-semibold text-slate-500 uppercase">Held-Out Test Accuracy</div>
+                  <div className="text-lg font-bold font-mono text-indigo-700 mt-0.5">
                     {(trainingResult.evaluation.test_accuracy * 100).toFixed(1)}%
                   </div>
                   <div className={`text-[10px] font-bold mt-0.5 ${trainingResult.active_model_comparison.delta_accuracy >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -427,6 +506,24 @@ export default function ModelTraining() {
                   <div className="text-[10px] text-slate-400 mt-0.5">Live API untouched</div>
                 </div>
               </div>
+
+              {/* Benchmark and Leakage Prevention Callout */}
+              {(trainingResult.tn_benchmark_evaluation || trainingResult.evaluation?.tn_benchmark_evaluation) && (
+                <div className="p-3 rounded-xl bg-white border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="text-slate-700">
+                      <b>TN Board Benchmark:</b>{' '}
+                      {(
+                        ((trainingResult.tn_benchmark_evaluation || trainingResult.evaluation?.tn_benchmark_evaluation).accuracy || 0) * 100
+                      ).toFixed(1)}% Accuracy, Macro F1: {(trainingResult.tn_benchmark_evaluation || trainingResult.evaluation?.tn_benchmark_evaluation).macro_f1} on {(trainingResult.tn_benchmark_evaluation || trainingResult.evaluation?.tn_benchmark_evaluation).test_samples} held-out State Board items.
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                    Template Leakage Overlap: {trainingResult.evaluation?.template_leakage_overlap_count || 0}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

@@ -22,11 +22,14 @@ from ml.predict import predictor
 from ml.random_forest_trainer import (
     train_random_forest_pipeline,
     activate_version,
-    train_edubloom_candidate_model
+    train_edubloom_candidate_model,
+    train_combined_candidate_model
 )
 from services.edubloom_service import (
     inspect_and_validate_edubloom_dataset,
-    optionally_stage_edubloom_into_db
+    optionally_stage_edubloom_into_db,
+    build_combined_training_dataset,
+    get_combined_dataset_summary
 )
 from services.question_selection import select_questions
 from services.pdf_generator import generate_exam_pdf, generate_teacher_summary_pdf
@@ -590,6 +593,30 @@ def admin_import_dataset_to_bank(upload_id):
     return jsonify(result)
 
 
+@app.route('/api/admin/datasets/merge-combined', methods=['POST'])
+@admin_required
+def admin_merge_combined_dataset():
+    """
+    Builds or updates the combined training dataset (Existing TN + EduBloom).
+    Deduplicates across both sources, normalizes schema and labels,
+    and generates manifest with counts and provenance audit (Admin Only).
+    """
+    data = request.get_json() or {}
+    force_rebuild = bool(data.get('force_rebuild', True))
+    result = build_combined_training_dataset(force_rebuild=force_rebuild, user_id=g.current_user.id)
+    return jsonify(result), 200
+
+
+@app.route('/api/admin/datasets/combined-summary', methods=['GET'])
+@admin_required
+def admin_combined_dataset_summary():
+    """
+    Get manifest and statistics for the combined dataset (Admin Only).
+    """
+    summary = get_combined_dataset_summary()
+    return jsonify(summary), 200
+
+
 # ==============================================================================
 # ADMIN: EDUBLOOM DATASET INTEGRATION & CANDIDATE MODEL PIPELINE (ADMIN ONLY)
 # ==============================================================================
@@ -636,6 +663,37 @@ def admin_train_edubloom_candidate():
     if not result.get('success'):
         return jsonify(result), 400
     return jsonify(result), 201
+
+
+@app.route('/api/admin/combined/train-candidate', methods=['POST'])
+@admin_required
+def admin_train_combined_candidate():
+    """
+    Trains a candidate Random Forest model on the combined dataset (Admin Only).
+    Evaluates on held-out test split, prevents template leakage, and benchmarks against active model.
+    STRICT SAFETY: Candidate models are saved as is_active=False.
+    """
+    data = request.get_json() or {}
+    task_name = data.get('task_name') or 'bloom_level'
+    sample_limit = data.get('sample_limit')
+    if sample_limit is not None:
+        try:
+            sample_limit = int(sample_limit)
+        except (ValueError, TypeError):
+            sample_limit = None
+    n_estimators = int(data.get('n_estimators') or 100)
+
+    result = train_combined_candidate_model(
+        task_name=task_name,
+        sample_limit=sample_limit,
+        n_estimators=n_estimators,
+        user_id=g.current_user.id
+    )
+
+    if not result.get('success'):
+        return jsonify(result), 400
+    return jsonify(result), 201
+
 
 
 @app.route('/api/admin/edubloom/stage-questions', methods=['POST'])
@@ -723,7 +781,7 @@ def admin_edubloom_summary():
 @admin_required
 def admin_train_model():
     """
-    Train a Random Forest classifier using TF-IDF text features on Tamil Nadu State Board data.
+    Train a Random Forest classifier using TF-IDF text features on Tamil Nadu State Board or Combined data.
     Trains only tasks with valid target labels (bloom_level or difficulty).
     Outputs held-out test evaluation, confusion matrix, and registers version (Admin Only).
     """
@@ -732,13 +790,22 @@ def admin_train_model():
     dataset_source = data.get('dataset_source') or 'db'
     n_estimators = int(data.get('n_estimators') or 100)
     auto_activate = bool(data.get('auto_activate', False))
+    sample_limit = data.get('sample_limit')
+    if sample_limit is not None:
+        try:
+            sample_limit = int(sample_limit)
+        except (ValueError, TypeError):
+            sample_limit = None
+    is_candidate = data.get('is_candidate')
     
     result = train_random_forest_pipeline(
         task_name=task_name,
         dataset_source=dataset_source,
         n_estimators=n_estimators,
+        sample_limit=sample_limit,
         user_id=g.current_user.id,
-        auto_activate=auto_activate
+        auto_activate=auto_activate,
+        is_candidate=is_candidate
     )
     
     if not result['success']:
@@ -780,7 +847,7 @@ def admin_activate_model(model_id):
 @admin_required
 def models_evaluation():
     """
-    Get detailed evaluation metrics for both models (ADMIN ONLY).
+    Get detailed evaluation metrics for active models and candidate models (ADMIN ONLY).
     Teachers receive 403 Forbidden.
     """
     db = get_db()
@@ -794,10 +861,20 @@ def models_evaluation():
                 eval_file = 'bloom_evaluation.json' if task == 'bloom_level' else 'difficulty_evaluation.json'
                 path = os.path.join(Config.REPORTS_DIR, eval_file)
                 if os.path.exists(path):
-                    with open(path) as f:
+                    with open(path, encoding='utf-8') as f:
                         result[task] = json.load(f)
                 else:
                     result[task] = {'status': 'not_trained', 'message': f'Model for {task} has not been trained yet.'}
+
+            # Check for candidate evaluation report
+            candidate_file = 'bloom_candidate_evaluation.json' if task == 'bloom_level' else 'difficulty_candidate_evaluation.json'
+            cand_path = os.path.join(Config.REPORTS_DIR, candidate_file)
+            if os.path.exists(cand_path):
+                try:
+                    with open(cand_path, encoding='utf-8') as f:
+                        result[f"{task}_candidate"] = json.load(f)
+                except Exception:
+                    pass
         return jsonify(result)
     finally:
         db.close()

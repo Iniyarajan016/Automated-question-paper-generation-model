@@ -11,36 +11,43 @@
   ],
   "train_samples": 48,
   "test_samples": 12,
-  "train_accuracy": 1.0,
+  "train_accuracy": 0.9792,
   "test_accuracy": 0.1667,
-  "macro_precision": 0.2222,
+  "macro_precision": 0.0417,
   "macro_recall": 0.1667,
-  "macro_f1": 0.1778,
-  "weighted_f1": 0.1778,
+  "macro_f1": 0.0667,
+  "weighted_f1": 0.0667,
+  "template_leakage_overlap_count": 0,
   "baseline": {
     "accuracy": 0.1667,
     "macro_f1": 0.0476,
     "strategy": "most_frequent"
   },
   "active_model_comparison": {
-    "active_version": "rf-bloom-v20261014_151424",
-    "active_accuracy": 0.942,
-    "active_macro_f1": 0.7901,
-    "active_macro_precision": 0.7929,
-    "active_macro_recall": 0.7913,
+    "active_version": "rf-bloom-v20261014_214514",
+    "active_accuracy": 0.9464,
+    "active_macro_f1": 0.7936,
+    "active_macro_precision": 0.7976,
+    "active_macro_recall": 0.7951,
     "candidate_accuracy": 0.1667,
-    "candidate_macro_f1": 0.1778,
-    "delta_accuracy": -0.7753,
-    "delta_macro_f1": -0.6123,
-    "delta_macro_precision": -0.5707,
-    "delta_macro_recall": -0.6246,
+    "candidate_macro_f1": 0.0667,
+    "delta_accuracy": -0.7797,
+    "delta_macro_f1": -0.7269,
+    "delta_macro_precision": -0.7559,
+    "delta_macro_recall": -0.6284,
     "performance_improved": false
+  },
+  "tn_benchmark_evaluation": {
+    "benchmark_name": "Tamil Nadu State Board Held-Out Test Benchmark",
+    "test_samples": 251,
+    "accuracy": 0.2709,
+    "macro_f1": 0.1741
   },
   "per_class": {
     "Analyze": {
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1_score": 0.0,
+      "precision": 0.25,
+      "recall": 1.0,
+      "f1_score": 0.4,
       "support": 2
     },
     "Apply": {
@@ -50,15 +57,15 @@
       "support": 2
     },
     "Create": {
-      "precision": 1.0,
-      "recall": 0.5,
-      "f1_score": 0.6667,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
       "support": 2
     },
     "Evaluate": {
-      "precision": 0.3333,
-      "recall": 0.5,
-      "f1_score": 0.4,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
       "support": 2
     },
     "Remember": {
@@ -85,12 +92,20 @@
     ],
     "matrix": [
       [
+        2,
         0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
         0,
         0,
         1,
         0,
-        1
+        1,
+        0
       ],
       [
         2,
@@ -101,9 +116,17 @@
         0
       ],
       [
-        1,
+        2,
         0,
-        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        0,
         0,
         0,
         0
@@ -112,36 +135,20 @@
         0,
         0,
         0,
-        1,
-        1,
-        0
-      ],
-      [
-        1,
         0,
-        0,
-        0,
-        0,
-        1
-      ],
-      [
-        0,
-        0,
-        0,
-        1,
-        1,
+        2,
         0
       ]
     ]
   },
   "class_distribution": {
-    "Create": 10,
     "Remember": 10,
     "Understand": 10,
-    "Evaluate": 10,
+    "Apply": 10,
+    "Create": 10,
     "Analyze": 10,
-    "Apply": 10
+    "Evaluate": 10
   },
   "warnings": [],
-  "generalization_note": "Evaluation was conducted on a held-out 80/20 stratified split. Candidate models are evaluated independently and require explicit admin action before promotion."
+  "generalization_note": "Evaluation was conducted on a held-out 80/20 stratified split with grouped template leakage prevention. Candidate models are evaluated independently and require explicit admin action before promotion."
 }

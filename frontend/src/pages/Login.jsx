@@ -2,14 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   GraduationCap,
-  Mail,
-  Lock,
   Eye,
   EyeOff,
   AlertCircle,
-  ArrowRight,
-  ShieldCheck,
-  CheckCircle2
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -47,7 +43,6 @@ export default function Login() {
 
       if (location.state?.from?.pathname && location.state.from.pathname !== '/login') {
         const fromPath = location.state.from.pathname;
-        // Prevent teachers from being redirected into admin-only routes
         if (fromPath.startsWith('/admin') && userRole !== 'admin') {
           targetPath = '/dashboard';
         } else {
@@ -59,252 +54,125 @@ export default function Login() {
 
       navigate(targetPath, { replace: true });
     } catch (err) {
-      setError(err.message || 'Invalid email or password. Please verify your credentials.');
+      setError(err.message || 'Invalid email or password. Please verify credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#F8F9FA] text-slate-900 font-sans">
-      {/* ========================================================= */}
-      {/* LEFT PANEL — BRANDING & QUESTION PAPER SHOWCASE          */}
-      {/* ========================================================= */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[52%] flex-col justify-between p-10 xl:p-14 border-r border-slate-200/90 bg-[#F8F9FB]">
+    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-8 bg-[#0B0F19] text-slate-100 font-sans selection:bg-blue-500/30 selection:text-white">
+      <div className="w-full max-w-md space-y-8 p-6 sm:p-8 rounded-2xl bg-slate-900/40 border border-slate-800/80 shadow-2xl backdrop-blur-sm">
         {/* Brand Header */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-600/30">
             <GraduationCap className="w-5 h-5" />
           </div>
           <div>
-            <div className="font-bold text-base tracking-tight text-slate-900 flex items-center gap-1.5">
-              ExamForge <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-blue-50 text-blue-700 border border-blue-200">AI</span>
+            <div className="font-bold text-base tracking-tight text-white flex items-center gap-1.5">
+              ExamForge <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">AI</span>
             </div>
-            <div className="text-xs text-slate-500 font-medium">Tamil Nadu State Board Assessment Platform</div>
+            <div className="text-[11px] text-slate-400 font-medium">Tamil Nadu State Board (Classes 6–12)</div>
           </div>
         </div>
 
-        {/* Hero Narrative & Understated Question Paper Visual */}
-        <div className="max-w-xl space-y-6 my-auto py-8">
-          <div className="space-y-3">
-            <h1 className="text-3xl xl:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
-              Question papers, thoughtfully generated.
-            </h1>
-            <p className="text-sm xl:text-base text-slate-600 leading-relaxed max-w-lg">
-              Create curriculum-aligned examination papers for Classes 6–12 with intelligent question selection and Bloom’s Taxonomy mapping.
-            </p>
-          </div>
-
-          {/* Understated Question Paper Visual */}
-          <div className="w-full bg-white rounded-xl border border-slate-200/90 shadow-sm p-5 xl:p-6 space-y-4">
-            {/* Paper Header */}
-            <div className="border-b border-slate-100 pb-3 space-y-1">
-              <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium uppercase tracking-wider">
-                <span>Tamil Nadu State Board</span>
-                <span>Annual Assessment</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-800">Class 10 — Science (General)</h2>
-                <span className="text-xs font-semibold text-slate-600">Max Marks: 75</span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                <span>Duration: 2.5 Hours</span>
-                <span>•</span>
-                <span>Subject Code: SCI-10</span>
-              </div>
-            </div>
-
-            {/* Paper Section A */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                  Section A — Objective (1 Mark each)
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">10 Marks</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-slate-50/70 border border-slate-100 space-y-1 text-xs text-slate-700">
-                <p className="font-medium text-slate-800">
-                  1. Which plant hormone promotes cell division in growing apical tissues?
-                </p>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px] text-slate-600 pl-1">
-                  <span>(A) Auxin</span>
-                  <span>(B) Cytokinin</span>
-                  <span>(C) Gibberellin</span>
-                  <span>(D) Abscisic acid</span>
-                </div>
-                <div className="flex items-center gap-2 pt-0.5 text-[10px] text-slate-400">
-                  <span className="px-1.5 py-0.5 bg-white rounded border border-slate-200 text-slate-600 font-medium">Biology • Unit 16</span>
-                  <span className="text-slate-300">•</span>
-                  <span>Bloom: Remembering</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Paper Section B */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60">
-                  Section B — Short Answer (2 Marks each)
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">20 Marks</span>
-              </div>
-              <div className="p-2.5 rounded-lg bg-slate-50/70 border border-slate-100 space-y-1 text-xs text-slate-700">
-                <p className="font-medium text-slate-800">
-                  2. State Snell's law of refraction and write its mathematical formula.
-                </p>
-                <div className="flex items-center gap-2 pt-0.5 text-[10px] text-slate-400">
-                  <span className="px-1.5 py-0.5 bg-white rounded border border-slate-200 text-slate-600 font-medium">Physics • Unit 2</span>
-                  <span className="text-slate-300">•</span>
-                  <span>Bloom: Understanding</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Understated Curriculum Metadata Footer */}
-            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-              <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Samacheer Kalvi Curriculum</span>
-              </div>
-              <span className="text-[11px] text-slate-400">Random Forest Verified</span>
-            </div>
-          </div>
+        {/* Title & Subtitle */}
+        <div className="space-y-2">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+            Institutional Sign In
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Sign in with your assigned Administrator or Faculty credentials.
+          </p>
         </div>
 
-        {/* Bottom Trust Statement */}
-        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-          <ShieldCheck className="w-4 h-4 text-slate-400" />
-          <span>Designed for Tamil Nadu State Board education</span>
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* RIGHT PANEL — SIGN IN FORM                               */}
-      {/* ========================================================= */}
-      <div className="w-full lg:w-1/2 xl:w-[48%] flex items-center justify-center p-6 sm:p-12 xl:p-16 bg-white">
-        <div className="w-full max-w-sm sm:max-w-md space-y-6">
-          {/* Mobile-only Branding Header */}
-          <div className="lg:hidden flex items-center gap-2.5 pb-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-xs">
-              <GraduationCap className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="font-bold text-base tracking-tight text-slate-900 flex items-center gap-1.5">
-                ExamForge <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-blue-50 text-blue-700 border border-blue-200">AI</span>
-              </div>
-              <div className="text-[11px] text-slate-500">Tamil Nadu State Board Assessment</div>
-            </div>
+        {/* Error Alert */}
+        {error && (
+          <div
+            role="alert"
+            className="p-4 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs flex items-start gap-3 animate-fade-in"
+          >
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="leading-relaxed">{error}</div>
           </div>
+        )}
 
-          {/* Form Header */}
-          <div className="space-y-1.5">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-              Welcome back
-            </h2>
-            <p className="text-sm text-slate-500">
-              Sign in to access your ExamForge workspace.
-            </p>
-          </div>
-
-          {/* Error Message Box */}
-          {error && (
-            <div
-              role="alert"
-              className="p-3.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-start gap-2.5 animate-fade-in"
+        {/* Sign In Form */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2"
             >
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <div className="leading-relaxed">{error}</div>
-            </div>
-          )}
-
-          {/* Sign In Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email Field */}
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5"
-              >
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="name@school.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                  className="w-full pl-9 pr-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-xs"
-                />
-              </div>
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                  className="w-full pl-9 pr-10 py-2.5 rounded-lg bg-white border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-xs"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer focus:outline-none"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Sign In Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-2 py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold tracking-wide transition-colors shadow-xs disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Signing in...</span>
-                </>
-              ) : (
-                <>
-                  <span>Sign in</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Secure Access Footer Note */}
-          <div className="pt-4 border-t border-slate-100 text-center">
-            <p className="text-xs text-slate-400 font-medium">
-              Secure access for administrators and teachers.
-            </p>
+              Email Address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="name@institution.edu"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+              className="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
           </div>
+
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2"
+            >
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                className="w-full pl-4 pr-12 py-3 rounded-xl bg-slate-900/90 border border-slate-700/80 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1.5 rounded-lg cursor-pointer transition-colors focus:outline-none"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3.5 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.99] text-white text-sm font-semibold tracking-wide transition-all duration-150 shadow-lg shadow-blue-600/30 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900"
+          >
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Verifying Credentials...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In to Dashboard</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Footer Note */}
+        <div className="pt-4 border-t border-slate-800/80 text-center">
+          <p className="text-xs text-slate-500 font-medium">
+            Secure access for administrators and faculty members.
+          </p>
         </div>
       </div>
     </div>

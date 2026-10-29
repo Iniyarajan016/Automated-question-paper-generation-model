@@ -30,6 +30,19 @@ VAGUE_QUESTION_PATTERNS = [
 ]
 
 
+def normalize_board(b):
+    """Normalize board name variations (e.g. 'Tamil NaduState Board', 'samacheer kalvi') to standard."""
+    if not b:
+        return 'Tamil Nadu State Board'
+    s = str(b).strip()
+    s_clean = re.sub(r'\s+', ' ', s).lower()
+    if 'tamil' in s_clean and 'board' in s_clean:
+        return 'Tamil Nadu State Board'
+    if s_clean in ['tamil nadu', 'samacheer kalvi', 'samacheer', 'tnsb']:
+        return 'Tamil Nadu State Board'
+    return s
+
+
 def is_vague_question(text):
     """Detect generic, synthetic template questions lacking specific curriculum concepts."""
     if not text:
@@ -38,6 +51,42 @@ def is_vague_question(text):
     for pat in VAGUE_QUESTION_PATTERNS:
         if re.search(pat, lower, re.IGNORECASE):
             return True, f"Matches generic template pattern: '{pat}'"
+    return False, None
+
+
+def is_invalid_question_content(text, target_language='English'):
+    """
+    Detect malformed questions, raw URLs, bibliography citations,
+    or language mismatches (e.g. Tamil script in English paper).
+    """
+    if not text:
+        return True, "Question text is empty"
+    
+    clean = str(text).strip()
+    
+    # 1. Reject raw URLs or strings containing links
+    if re.search(r'https?://|www\.[a-z0-9\-]+\.[a-z]{2,}', clean, re.IGNORECASE):
+        return True, "Contains raw URL or web resource reference"
+    
+    # 2. Reject bibliography / reference book citations / publishers
+    if re.search(r'\b(?:reference books?|internet resources?|publications?|publishers?|publishing house|company ltd|edition|isbn|rastogi|s\.chand|narosa|b\.s\.bahl|pl sony|puri and sharma|atkins|h\.c\. verma|mcgraw|vol\.|volume)\b', clean, re.IGNORECASE):
+        return True, "Contains textbook bibliography, publisher, or citation metadata"
+        
+    # Reject isolated section header artifacts
+    if re.search(r'^(?:higher order thinking skills|hots|assertion and reason|assertion and reasoning)\s*(?:\([a-z]+\))?$', clean, re.IGNORECASE):
+        return True, "Contains isolated section heading artifact"
+        
+    # 3. Reject language mismatch
+    has_tamil = any('\u0b80' <= ch <= '\u0bff' for ch in clean)
+    if target_language and str(target_language).strip().lower() in ['english', 'en'] and has_tamil:
+        return True, "Contains Tamil script in an English-medium question paper"
+    elif target_language and str(target_language).strip().lower() in ['tamil', 'ta'] and not has_tamil:
+        return True, "Missing Tamil script in a Tamil-medium question paper"
+        
+    # 4. Reject excessively short strings
+    if len(clean) < 8:
+        return True, "Question text is too short to be a valid question"
+        
     return False, None
 
 
@@ -111,7 +160,8 @@ def select_questions(
     bloom_distribution=None,        # e.g., {'Remember': 25, 'Understand': 35, ...}
     duration_minutes=None,
     sections_config=None,           # Dynamic section definitions: [{'label': 'A', 'marks_per_question': 1, 'num_questions': 5}, ...]
-    seed=None
+    seed=None,
+    language=None                   # Medium of examination: 'English' (default for non-Tamil) or 'Tamil'
 ):
     """
     Select questions based on teacher requirements with strict Tamil Nadu State Board constraints:
@@ -128,7 +178,8 @@ def select_questions(
     filters_applied = []
 
     # Step 1: Strict Board and Class Validation
-    if board and board.lower() not in ['tamil nadu state board', 'samacheer kalvi', 'tamil nadu']:
+    normalized_board = normalize_board(board) if board else 'Tamil Nadu State Board'
+    if normalized_board != 'Tamil Nadu State Board':
         return {
             'success': False,
             'is_valid': False,
@@ -148,10 +199,8 @@ def select_questions(
 
     eligible = list(available_questions)
 
-    # Filter to Tamil Nadu State Board only
-    eligible = [q for q in eligible if str(q.get('board', '')).strip().lower() in [
-        'tamil nadu state board', 'samacheer kalvi', 'tamil nadu', ''
-    ]]
+    # Filter to Tamil Nadu State Board only (robust to casing and spacing variants)
+    eligible = [q for q in eligible if not q.get('board') or normalize_board(q.get('board')) == 'Tamil Nadu State Board']
     filters_applied.append("board=Tamil Nadu State Board")
 
     if class_grade:
@@ -210,10 +259,21 @@ def select_questions(
         eligible = in_syllabus
         filters_applied.append(f"topics={sorted(display_topics)}")
 
-    # Step 3: Vague & Template Question Quality Filter
+    # Step 3: Vague & Template Question Quality Filter and Language Integrity
+    target_language = language or ('Tamil' if str(subject).strip().lower() == 'tamil' else 'English')
     quality_filtered = []
     for q in eligible:
-        vague, reason = is_vague_question(q.get('question'))
+        q_text = q.get('question') or q.get('question_text')
+        
+        # Check for invalid content (raw URLs, citations, language mismatches)
+        invalid, inv_reason = is_invalid_question_content(q_text, target_language=target_language)
+        if invalid:
+            warnings.append(
+                f"Excluded invalid question '{q.get('question_id', q.get('id', 'N/A'))}': {inv_reason}."
+            )
+            continue
+
+        vague, reason = is_vague_question(q_text)
         if vague:
             warnings.append(
                 f"Excluded vague/template question '{q.get('question_id', q.get('id', 'N/A'))}': {reason}."
@@ -287,8 +347,19 @@ def select_questions(
             )
             return format_mark(raw)
 
-        sec_expected_q_count = sum(_get_sec_n(s) for s in sections_config)
-        sec_expected_total_marks = format_mark(sum(_get_sec_m(s) * _get_sec_n(s) for s in sections_config))
+        # Filter active sections: zero-count sections (e.g. 0-count Section A) must not block generation
+        active_sections = [s for s in sections_config if _get_sec_n(s) > 0]
+        if not active_sections:
+            return {
+                'success': False,
+                'is_valid': False,
+                'error': "No active sections configured with positive question counts.",
+                'eligible_count': len(eligible),
+                'selected_questions': []
+            }
+
+        sec_expected_q_count = sum(_get_sec_n(s) for s in active_sections)
+        sec_expected_total_marks = format_mark(sum(_get_sec_m(s) * _get_sec_n(s) for s in active_sections))
 
         if total_marks is not None and abs(float(sec_expected_total_marks) - float(total_marks)) > 0.01:
             return {
@@ -302,17 +373,11 @@ def select_questions(
         topic_label = f" (Portions: {', '.join(display_topics)})" if display_topics else ""
         selected_ids = set()
 
-        for idx, sec_def in enumerate(sections_config):
+        # Strict continuous sequential labeling: Section A, Section B, Section C...
+        for idx, sec_def in enumerate(active_sections):
             label = chr(ord('A') + idx)
-            raw_m = sec_def.get('marks_per_question') if sec_def.get('marks_per_question') is not None else (
-                sec_def.get('marks') if sec_def.get('marks') is not None else (
-                    sec_def.get('mark') if sec_def.get('mark') is not None else 1
-                )
-            )
-            m_val = format_mark(raw_m)
-            req_n = int(sec_def.get('num_questions') or sec_def.get('count') or sec_def.get('required_questions') or 0)
-            if req_n <= 0:
-                continue
+            m_val = _get_sec_m(sec_def)
+            req_n = _get_sec_n(sec_def)
 
             sec_candidates = [
                 q for q in eligible
@@ -321,11 +386,31 @@ def select_questions(
 
             if len(sec_candidates) < req_n:
                 shortage = req_n - len(sec_candidates)
+                avail_n = len(sec_candidates)
+                suggestions = []
+                if avail_n > 0:
+                    suggestions.append(f"Adjust Section {label} question count to {avail_n} or fewer in the section builder.")
+                else:
+                    suggestions.append(f"Set Section {label} question count to 0 or remove it if no {m_val}-mark questions are needed.")
+                if display_topics and len(display_topics) < 8:
+                    suggestions.append("Select additional syllabus chapters/portions to widen the pool of eligible questions.")
+                suggestions.append(f"Import or author reviewed {m_val}-mark questions for {class_grade or 'the class'} {subject or ''} via the Question Bank.")
+
+                error_msg = (
+                    f"Insufficient questions for Section {label}: Need {shortage} more {m_val}-mark question(s) for "
+                    f"{class_grade or 'selected class'} {subject or ''}{topic_label}. "
+                    f"(Available: {avail_n}, Required: {req_n})."
+                )
+
                 return {
                     'success': False,
                     'is_valid': False,
-                    'error': f"Insufficient questions for Section {label}: Need {shortage} more {m_val}-mark question(s) for {class_grade or 'selected class'} {subject or ''}{topic_label}. (Available: {len(sec_candidates)}, Required: {req_n}).",
+                    'error': error_msg,
                     'eligible_count': len(eligible),
+                    'available_count': avail_n,
+                    'required_count': req_n,
+                    'shortage': shortage,
+                    'suggestions': suggestions,
                     'selected_questions': []
                 }
 
@@ -446,58 +531,35 @@ def select_questions(
 
         actual_total = format_mark(sum(q['marks'] for q in selected))
 
-        section_a = []
-        section_b = []
-        section_c = []
+        raw_legacy_sections = []
+        s_1m = [q for q in selected if (q.get('marks') or 2) <= 1.5]
+        s_2m_3m = [q for q in selected if 1.5 < (q.get('marks') or 2) <= 3.5]
+        s_5m = [q for q in selected if (q.get('marks') or 2) > 3.5]
 
-        for q in selected:
-            m = q.get('marks') or 2
-            if m <= 1.5:
-                section_a.append(q)
-            elif m <= 3.5:
-                section_b.append(q)
-            else:
-                section_c.append(q)
+        if s_1m:
+            raw_legacy_sections.append(('OBJECTIVE & VERY SHORT ANSWER QUESTIONS', s_1m, 1, 'Each question carries 1 mark.'))
+        if s_2m_3m:
+            raw_legacy_sections.append(('SHORT ANSWER & CONCEPTUAL QUESTIONS', s_2m_3m, None, 'Each question carries 2 or 3 marks as indicated.'))
+        if s_5m:
+            raw_legacy_sections.append(('LONG ANSWER & DETAILED QUESTIONS', s_5m, 5, 'Answer all questions with necessary diagrams and steps. Each question carries 5 marks.'))
 
         global_num = 1
-        if section_a:
-            sec_marks = format_mark(sum(q['marks'] for q in section_a))
-            for q in section_a:
+        for idx, (title_suf, q_list, def_m, inst_detail) in enumerate(raw_legacy_sections):
+            label = chr(ord('A') + idx)
+            sec_marks = format_mark(sum(q.get('marks', def_m or 2) for q in q_list))
+            for q in q_list:
                 q['display_number'] = global_num
                 ordered_questions.append(q)
                 global_num += 1
-            sections.append({
-                'name': 'SECTION A — OBJECTIVE & VERY SHORT ANSWER QUESTIONS',
-                'instructions': f'Answer all questions. Each question carries 1 mark. ({len(section_a)} × 1 = {sec_marks} Marks)',
-                'questions': section_a,
-                'marks_per_question': 1,
-                'total_section_marks': sec_marks
-            })
 
-        if section_b:
-            sec_marks = format_mark(sum(q['marks'] for q in section_b))
-            for q in section_b:
-                q['display_number'] = global_num
-                ordered_questions.append(q)
-                global_num += 1
+            inst_count = f"({len(q_list)} × {def_m} = {sec_marks} Marks)" if def_m else f"(Total: {sec_marks} Marks)"
             sections.append({
-                'name': 'SECTION B — SHORT ANSWER & CONCEPTUAL QUESTIONS',
-                'instructions': f'Answer all questions. Each question carries 2 or 3 marks as indicated. (Total: {sec_marks} Marks)',
-                'questions': section_b,
-                'total_section_marks': sec_marks
-            })
-
-        if section_c:
-            sec_marks = format_mark(sum(q['marks'] for q in section_c))
-            for q in section_c:
-                q['display_number'] = global_num
-                ordered_questions.append(q)
-                global_num += 1
-            sections.append({
-                'name': 'SECTION C — LONG ANSWER & DETAILED QUESTIONS',
-                'instructions': f'Answer all questions with necessary diagrams and steps. Each question carries 5 marks. ({len(section_c)} × 5 = {sec_marks} Marks)',
-                'questions': section_c,
-                'marks_per_question': 5,
+                'label': label,
+                'name': f"SECTION {label} — {title_suf}",
+                'instructions': f"Answer all questions. {inst_detail} {inst_count}",
+                'questions': q_list,
+                'marks_per_question': def_m,
+                'num_questions': len(q_list),
                 'total_section_marks': sec_marks
             })
 

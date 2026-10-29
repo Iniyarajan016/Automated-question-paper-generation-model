@@ -6,6 +6,7 @@ Produces formal, printable examination papers and teacher summaries.
 import os
 import sys
 import re
+import html
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -353,11 +354,12 @@ def generate_exam_pdf(
             q_text = q.get('question', '').strip()
             num = q.get('display_number') or q_global_num
             q_global_num = max(q_global_num + 1, num + 1)
+            safe_q_text = html.escape(q_text)
 
             # Format question row as 2-column table: Question on left, Marks on right
             row_data = [
                 [
-                    Paragraph(f"<b>{num}.</b>  {q_text}", styles['QuestionText']),
+                    Paragraph(f"<b>{num}.</b>  {safe_q_text}", styles['QuestionText']),
                     Paragraph(marks_str, styles['MarksText'])
                 ]
             ]

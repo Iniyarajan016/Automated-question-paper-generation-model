@@ -466,9 +466,9 @@ class TestInstitutionalRolesAndSubjectControl(unittest.TestCase):
             'title': 'Shortage Paper',
             'class_grade': 'Class 10',
             'subject': 'Science',
-            'total_marks': 500,
+            'total_marks': 750,
             'sections': [
-                {'marks_per_question': 5, 'num_questions': 100}  # 100 5-mark questions unavailable
+                {'marks_per_question': 5, 'num_questions': 150}  # 150 5-mark questions unavailable
             ]
         }
         resp = self.client.post('/api/generate-paper', headers=headers, json=payload)

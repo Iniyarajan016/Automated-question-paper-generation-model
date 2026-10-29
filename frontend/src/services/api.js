@@ -48,13 +48,19 @@ async function handleResponse(response) {
 
   if (!response.ok) {
     let errorDetail = 'Network request failed';
+    let errorObj = null;
     try {
       const errorData = await response.json();
       errorDetail = errorData.error || errorData.message || JSON.stringify(errorData);
+      errorObj = errorData;
     } catch {
       errorDetail = `HTTP ${response.status}: ${response.statusText}`;
     }
-    throw new Error(errorDetail);
+    const err = new Error(errorDetail);
+    if (errorObj) {
+      err.data = errorObj;
+    }
+    throw err;
   }
   return response.json();
 }

@@ -45,15 +45,48 @@ An end-to-end Machine Learning educational platform that automates cognitive tes
 cd backend
 pip install -r requirements.txt
 
-# Run dataset download & ETL (generates backend/data/questions_dataset.csv)
-python data/download_dataset.py
-
-# Train both ML pipelines & generate evaluation reports
-python ml/train_models.py
-
 # Start Flask REST API server (runs on http://localhost:5000)
 python app.py
 ```
+
+### Local Candidate Model Training (VS Code / PowerShell)
+
+The cleaned Hugging Face dataset is already available at
+`backend/data/questions_dataset.csv`. Use this local copy by default; no dataset
+download or question-bank import is required for classifier training. Candidate
+models and evaluation reports receive unique timestamped names. This workflow
+does not replace the active production models unless `--activate` is explicitly
+passed.
+
+```powershell
+Set-Location 'C:\Users\iniya\OneDrive\Desktop\mini project'
+& .\.venv\Scripts\Activate.ps1
+
+# Fast local run on a stratified subset; omit --sample-limit for all 73,712 rows.
+python .\train_local.py --task all --source csv --sample-limit 6000 --n-estimators 30
+
+# Review the newest Bloom and difficulty held-out evaluation reports.
+Get-ChildItem .\backend\reports\rf-*-candidate-local-v*_evaluation.json |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 2 |
+  ForEach-Object { Get-Content $_.FullName -Raw }
+
+# Test candidate inference (replace the sample question as needed).
+$bloomCandidate = Get-ChildItem .\backend\models\rf-bloom-candidate-local-v*.joblib |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1 -ExpandProperty FullName
+python .\train_local.py --task bloom --predict-candidate $bloomCandidate --question "Explain how evaporation changes liquid water into water vapor."
+
+$difficultyCandidate = Get-ChildItem .\backend\models\rf-difficulty-candidate-local-v*.joblib |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1 -ExpandProperty FullName
+python .\train_local.py --task difficulty --predict-candidate $difficultyCandidate --question "Explain how evaporation changes liquid water into water vapor."
+```
+
+Training metrics are internal held-out evaluations of this dataset, not proof of
+curriculum alignment or generalization to unseen boards. EduBloom remains
+General / EduBloom data and does not become verified Tamil Nadu State Board
+material through training.
 
 ### 3. Frontend Setup & Startup
 ```bash

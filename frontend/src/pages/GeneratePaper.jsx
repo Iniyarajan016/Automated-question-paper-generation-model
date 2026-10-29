@@ -71,6 +71,7 @@ export default function GeneratePaper() {
   const { user, isTeacher, isAdmin, isPrincipal, isChairman } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
 
   // Parse assigned subjects for teachers
   const assignedSubjects = React.useMemo(() => {
@@ -92,12 +93,11 @@ export default function GeneratePaper() {
   const [selectedChapters, setSelectedChapters] = useState([]);
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
 
-  // Dynamic Mark-Wise Section Builder State (starts with Section A)
+  // Dynamic Mark-Wise Section Builder State (defaults to 2, 3, and 5 marks)
   const [sections, setSections] = useState([
-    { id: 'sec-1', marks_per_question: 1, num_questions: 5 },
-    { id: 'sec-2', marks_per_question: 2, num_questions: 5 },
-    { id: 'sec-3', marks_per_question: 3, num_questions: 5 },
-    { id: 'sec-4', marks_per_question: 5, num_questions: 4 },
+    { id: 'sec-1', marks_per_question: 2, num_questions: 5 },
+    { id: 'sec-2', marks_per_question: 3, num_questions: 5 },
+    { id: 'sec-3', marks_per_question: 5, num_questions: 5 },
   ]);
 
   const calculatedQuestions = sections.reduce((sum, s) => sum + (Number(s.num_questions) || 0), 0);
@@ -113,7 +113,7 @@ export default function GeneratePaper() {
     subject: isSingleSubject ? assignedSubjects[0] : 'Science',
     duration_minutes: 90,
     total_marks: 50,
-    num_questions: 19,
+    num_questions: 15,
     bloom_distribution: {
       Remember: 25,
       Understand: 30,
@@ -131,7 +131,7 @@ export default function GeneratePaper() {
 
   // Section builder modifiers
   const addSection = () => {
-    const nextMark = sections.length === 1 ? 2 : sections.length === 2 ? 3 : 5;
+    const nextMark = sections.length === 1 ? 3 : sections.length === 2 ? 5 : 2;
     setSections((prev) => [
       ...prev,
       { id: `sec-${Date.now()}`, marks_per_question: nextMark, num_questions: 2 }
@@ -263,6 +263,7 @@ export default function GeneratePaper() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuggestions([]);
 
     if (isChairman) {
       setError('Chairman accounts are institutional leadership only and cannot generate question papers.');
@@ -318,10 +319,12 @@ export default function GeneratePaper() {
         duration_minutes: form.duration_minutes,
         total_marks: Number(form.total_marks),
         num_questions: calculatedQuestions,
-        sections: sections.map((s) => ({
-          marks_per_question: Number(s.marks_per_question),
-          num_questions: Number(s.num_questions)
-        })),
+        sections: sections
+          .filter((s) => (Number(s.num_questions) || 0) > 0)
+          .map((s) => ({
+            marks_per_question: Number(s.marks_per_question),
+            num_questions: Number(s.num_questions)
+          })),
         difficulty_distribution: form.difficulty_distribution,
         bloom_distribution: form.bloom_distribution,
       };
@@ -337,9 +340,11 @@ export default function GeneratePaper() {
         });
       } else {
         setError(result.error || 'Failed to generate question paper.');
+        setSuggestions(result.suggestions || []);
       }
     } catch (err) {
       setError(err.message || 'An unexpected error occurred during paper generation.');
+      setSuggestions(err.data?.suggestions || []);
     } finally {
       setLoading(false);
     }
@@ -395,9 +400,19 @@ export default function GeneratePaper() {
       {error && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-3 text-rose-800 text-xs font-medium">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-          <div className="flex-1">
+          <div className="flex-1 space-y-1.5">
             <div className="font-bold">Generation Notice:</div>
             <div>{error}</div>
+            {suggestions && suggestions.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-rose-200/60">
+                <div className="font-semibold text-rose-900 mb-1">Recommended Actions:</div>
+                <ul className="list-disc list-inside space-y-1 text-rose-700 font-normal">
+                  {suggestions.map((sug, i) => (
+                    <li key={i}>{sug}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -661,7 +676,7 @@ export default function GeneratePaper() {
                         <td className="py-2.5 px-3">
                           <input
                             type="number"
-                            min="1"
+                            min="0"
                             max="30"
                             value={sec.num_questions}
                             onChange={(e) => updateSection(idx, 'num_questions', e.target.value)}

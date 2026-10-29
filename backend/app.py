@@ -8,10 +8,13 @@ import os
 import sys
 import json
 import random
+import logging
 import pandas as pd
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, send_file, g
 from flask_cors import CORS
+
+api_logger = logging.getLogger('ExamForgeAPI')
 
 from config import Config
 from database.db import SessionLocal, init_db, engine
@@ -1501,6 +1504,19 @@ def generate_paper():
         data = request.get_json()
         if not data:
             return jsonify({'error': 'Request body is required'}), 400
+
+        # Sanitized request logging (strictly excluding authorization tokens, passwords, cookies)
+        sanitized_summary = {
+            'class_grade': data.get('class_grade'),
+            'subject': data.get('subject'),
+            'board': data.get('board'),
+            'chapters': data.get('chapters') or data.get('portions') or data.get('chapter'),
+            'sections': data.get('sections') or data.get('sections_config'),
+            'num_questions': data.get('num_questions'),
+            'total_marks': data.get('total_marks')
+        }
+        app.logger.info(f"[GENERATE_PAPER_REQUEST] {json.dumps(sanitized_summary, ensure_ascii=False)}")
+        api_logger.info(f"[GENERATE_PAPER_REQUEST] {json.dumps(sanitized_summary, ensure_ascii=False)}")
         
         title = (data.get('title') or 'Terminal Examination').strip()
         raw_class = data.get('class_grade')
@@ -1518,6 +1534,16 @@ def generate_paper():
                 class_grade = class_str
         else:
             class_grade = None
+
+        # Board Validation
+        raw_board = data.get('board')
+        from services.question_selection import normalize_board
+        if raw_board and normalize_board(raw_board) != 'Tamil Nadu State Board':
+            return jsonify({
+                'success': False,
+                'is_valid': False,
+                'error': f"Unsupported educational board '{raw_board}'. The application strictly supports Tamil Nadu State Board / Samacheer Kalvi."
+            }), 400
 
         # Mandatory Class Validation: Classes 6 to 12 only!
         if not class_grade or class_grade not in get_supported_classes():
@@ -1593,7 +1619,10 @@ def generate_paper():
 
         # Query approved Tamil Nadu State Board questions
         query = db.query(Question).filter(
-            (Question.board == 'Tamil Nadu State Board') | (Question.board.is_(None))
+            (Question.board == 'Tamil Nadu State Board') |
+            (Question.board == 'Tamil NaduState Board') |
+            (Question.board.ilike('Tamil Nadu%')) |
+            (Question.board.is_(None))
         ).filter(
             Question.class_grade.ilike(class_grade)
         ).filter(
@@ -1639,7 +1668,8 @@ def generate_paper():
             bloom_distribution=bloom_dist,
             duration_minutes=duration_minutes,
             sections_config=sections_config,
-            seed=seed
+            seed=seed,
+            language=data.get('language')
         )
         
         if not result['success']:
@@ -1732,6 +1762,19 @@ def preview_paper_blueprint():
         if not data:
             return jsonify({'error': 'Request body is required'}), 400
 
+        # Sanitized request logging (strictly excluding authorization tokens, passwords, cookies)
+        sanitized_summary = {
+            'class_grade': data.get('class_grade'),
+            'subject': data.get('subject'),
+            'board': data.get('board'),
+            'chapters': data.get('chapters') or data.get('portions') or data.get('chapter'),
+            'sections': data.get('sections') or data.get('sections_config'),
+            'num_questions': data.get('num_questions'),
+            'total_marks': data.get('total_marks')
+        }
+        app.logger.info(f"[GENERATE_PAPER_REQUEST] {json.dumps(sanitized_summary, ensure_ascii=False)}")
+        api_logger.info(f"[GENERATE_PAPER_REQUEST] {json.dumps(sanitized_summary, ensure_ascii=False)}")
+
         title = (data.get('title') or 'Terminal Examination').strip()
         raw_class = data.get('class_grade')
         if raw_class:
@@ -1748,6 +1791,16 @@ def preview_paper_blueprint():
                 class_grade = class_str
         else:
             class_grade = None
+
+        # Board Validation
+        raw_board = data.get('board')
+        from services.question_selection import normalize_board
+        if raw_board and normalize_board(raw_board) != 'Tamil Nadu State Board':
+            return jsonify({
+                'success': False,
+                'is_valid': False,
+                'error': f"Unsupported educational board '{raw_board}'. The application strictly supports Tamil Nadu State Board / Samacheer Kalvi."
+            }), 400
 
         # Mandatory Class Validation: Classes 6 to 12 only!
         if not class_grade or class_grade not in get_supported_classes():
@@ -1823,7 +1876,10 @@ def preview_paper_blueprint():
 
         # Query approved Tamil Nadu State Board questions
         query = db.query(Question).filter(
-            (Question.board == 'Tamil Nadu State Board') | (Question.board.is_(None))
+            (Question.board == 'Tamil Nadu State Board') |
+            (Question.board == 'Tamil NaduState Board') |
+            (Question.board.ilike('Tamil Nadu%')) |
+            (Question.board.is_(None))
         ).filter(
             Question.class_grade.ilike(class_grade)
         ).filter(
@@ -1865,7 +1921,8 @@ def preview_paper_blueprint():
             bloom_distribution=bloom_dist,
             duration_minutes=duration_minutes,
             sections_config=sections_config,
-            seed=seed
+            seed=seed,
+            language=data.get('language')
         )
 
         if not result['success']:

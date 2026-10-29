@@ -210,9 +210,10 @@ def auth_register():
     email = (data.get('email') or '').strip().lower()
     password = data.get('password') or ''
     full_name = (data.get('full_name') or '').strip()
-    role = (data.get('role') or 'teacher').strip().lower()
-    if role not in ['teacher', 'admin']:
-        role = 'teacher'
+    requested_role = (data.get('role') or 'teacher').strip().lower()
+    if requested_role in ['chairman', 'principal', 'admin']:
+        return jsonify({'error': 'Institutional leadership accounts (Chairman, Principal, Administrator) cannot be created via public registration.'}), 403
+    role = 'teacher'
     
     if not email:
         return jsonify({'error': 'Email is required'}), 400
@@ -280,7 +281,7 @@ def dashboard_stats():
         tn_classes = get_supported_classes()
         
         if user.role == 'chairman':
-            principal_count = db.query(User).filter_by(role='principal').count()
+            principal_count = db.query(User).filter(User.role.in_(['principal', 'admin'])).count()
             teacher_query = db.query(User).filter_by(role='teacher')
             total_teachers = teacher_query.count()
             active_teachers = teacher_query.filter_by(is_active=True).count()
@@ -476,7 +477,7 @@ def chairman_list_principals():
     """List all registered Principal accounts (Chairman Only)."""
     db = get_db()
     try:
-        principals = db.query(User).filter_by(role='principal').order_by(User.created_at.desc()).all()
+        principals = db.query(User).filter(User.role.in_(['principal', 'admin'])).order_by(User.created_at.desc()).all()
         return jsonify({
             'principals': [p.to_dict() for p in principals],
             'total': len(principals)
@@ -542,7 +543,7 @@ def chairman_update_principal(user_id):
         principal = db.get(User, user_id)
         if not principal:
             return jsonify({'error': 'Principal account not found'}), 404
-        if principal.role != 'principal':
+        if principal.role not in ['principal', 'admin']:
             return jsonify({'error': 'Chairman is strictly authorized to manage Principal accounts only.'}), 400
 
         if 'full_name' in data and data['full_name']:
@@ -584,7 +585,7 @@ def chairman_reset_principal_password(user_id):
         principal = db.get(User, user_id)
         if not principal:
             return jsonify({'error': 'Principal account not found'}), 404
-        if principal.role != 'principal':
+        if principal.role not in ['principal', 'admin']:
             return jsonify({'error': 'Chairman is strictly authorized to manage Principal accounts only.'}), 400
 
         principal.password_hash = hash_password(new_password)
@@ -812,7 +813,7 @@ def admin_get_staff():
 @app.route('/api/admin/staff', methods=['POST'])
 @admin_required
 def admin_create_staff():
-    """Add a new staff or faculty account (Admin Only)."""
+    """Add a new staff or faculty account (Principal / Admin Only)."""
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Request payload must be JSON'}), 400
@@ -820,7 +821,7 @@ def admin_create_staff():
     email = (data.get('email') or '').strip().lower()
     full_name = (data.get('full_name') or '').strip()
     phone = (data.get('phone') or '').strip()
-    role = (data.get('role') or 'teacher').strip().lower()
+    requested_role = (data.get('role') or 'teacher').strip().lower()
     subject_spec = (data.get('subject_specialization') or '').strip()
     initial_password = data.get('password') or 'Staff@2026'
     
@@ -828,8 +829,14 @@ def admin_create_staff():
         return jsonify({'error': 'Staff email is required'}), 400
     if not full_name:
         return jsonify({'error': 'Staff full name is required'}), 400
-    if role not in ['teacher', 'admin']:
-        role = 'teacher'
+    
+    # Strict role hierarchy check
+    if requested_role == 'chairman':
+        return jsonify({'error': 'Principals/Administrators cannot create Chairman accounts.'}), 403
+    if requested_role in ['admin', 'principal']:
+        return jsonify({'error': 'Principals cannot create additional Principal/Administrator accounts. Principals must be appointed by the Chairman.'}), 403
+    
+    role = 'teacher'
     
     db = get_db()
     try:
@@ -877,16 +884,32 @@ def admin_update_staff(user_id):
         if not staff:
             return jsonify({'error': 'Staff account not found'}), 404
         
-        # Prevent self-deactivation of primary admin
-        if staff.id == g.current_user.id and data.get('is_active') is False:
-            return jsonify({'error': 'Cannot deactivate your own administrator account.'}), 400
+        # Principals/Administrators cannot modify Chairman accounts
+        if staff.role == 'chairman':
+            return jsonify({'error': 'Principals/Administrators cannot modify Chairman accounts.'}), 403
+        
+        # Prevent self-deactivation and self-demotion
+        if staff.id == g.current_user.id:
+            if data.get('is_active') is False:
+                return jsonify({'error': 'Cannot deactivate your own administrator account.'}), 400
+            if 'role' in data and data['role'] != staff.role:
+                return jsonify({'error': 'Cannot change role of your own account (self-demotion forbidden).'}), 400
         
         if 'full_name' in data and data['full_name']:
             staff.full_name = data['full_name'].strip()
         if 'phone' in data:
             staff.phone = data['phone'].strip()
-        if 'role' in data and data['role'] in ['teacher', 'admin']:
-            staff.role = data['role']
+        
+        # Role update validations
+        if 'role' in data:
+            req_role = data['role']
+            if req_role == 'chairman':
+                return jsonify({'error': 'Cannot promote accounts to Chairman.'}), 403
+            if req_role in ['admin', 'principal'] and staff.role not in ['admin', 'principal']:
+                return jsonify({'error': 'Principals cannot promote accounts to Principal/Administrator.'}), 403
+            if req_role in ['teacher', 'admin']:
+                staff.role = req_role
+        
         if 'subject_specialization' in data:
             staff.subject_specialization = data['subject_specialization'].strip()
         if 'is_active' in data:
@@ -924,6 +947,8 @@ def admin_reset_staff_password(user_id):
         staff = db.get(User, user_id)
         if not staff:
             return jsonify({'error': 'Staff account not found'}), 404
+        if staff.role == 'chairman':
+            return jsonify({'error': 'Principals/Administrators cannot reset passwords for Chairman accounts.'}), 403
         
         staff.password_hash = hash_password(new_password)
         staff.updated_at = datetime.now(timezone.utc)
@@ -947,6 +972,8 @@ def admin_delete_staff(user_id):
         staff = db.get(User, user_id)
         if not staff:
             return jsonify({'error': 'Staff account not found'}), 404
+        if staff.role == 'chairman':
+            return jsonify({'error': 'Principals/Administrators cannot delete or deactivate Chairman accounts.'}), 403
         if staff.id == g.current_user.id:
             return jsonify({'error': 'Cannot delete or deactivate your own account'}), 400
         
@@ -1084,61 +1111,21 @@ def admin_validate_edubloom():
 @app.route('/api/admin/edubloom/train-candidate', methods=['POST'])
 @admin_required
 def admin_train_edubloom_candidate():
-    """
-    Trains a candidate Random Forest model on the EduBloom dataset (Admin Only).
-    Evaluates on an 80/20 held-out test split and compares against currently active models.
-    STRICT SAFETY: Does NOT activate or overwrite existing models without explicit admin promotion.
-    """
-    data = request.get_json() or {}
-    task_name = data.get('task_name') or 'bloom_level'
-    sample_limit = data.get('sample_limit')
-    if sample_limit is not None:
-        try:
-            sample_limit = int(sample_limit)
-        except (ValueError, TypeError):
-            sample_limit = None
-    n_estimators = int(data.get('n_estimators') or 100)
-
-    result = train_edubloom_candidate_model(
-        task_name=task_name,
-        sample_limit=sample_limit,
-        n_estimators=n_estimators,
-        user_id=g.current_user.id
-    )
-
-    if not result.get('success'):
-        return jsonify(result), 400
-    return jsonify(result), 201
+    """Model training through web interface is disabled. Run python backend/ml/train_local.py"""
+    return jsonify({
+        'success': False,
+        'error': 'Model training through web interface is disabled. Please run the local training script in VS Code: python backend/ml/train_local.py'
+    }), 403
 
 
 @app.route('/api/admin/combined/train-candidate', methods=['POST'])
 @admin_required
 def admin_train_combined_candidate():
-    """
-    Trains a candidate Random Forest model on the combined dataset (Admin Only).
-    Evaluates on held-out test split, prevents template leakage, and benchmarks against active model.
-    STRICT SAFETY: Candidate models are saved as is_active=False.
-    """
-    data = request.get_json() or {}
-    task_name = data.get('task_name') or 'bloom_level'
-    sample_limit = data.get('sample_limit')
-    if sample_limit is not None:
-        try:
-            sample_limit = int(sample_limit)
-        except (ValueError, TypeError):
-            sample_limit = None
-    n_estimators = int(data.get('n_estimators') or 100)
-
-    result = train_combined_candidate_model(
-        task_name=task_name,
-        sample_limit=sample_limit,
-        n_estimators=n_estimators,
-        user_id=g.current_user.id
-    )
-
-    if not result.get('success'):
-        return jsonify(result), 400
-    return jsonify(result), 201
+    """Model training through web interface is disabled. Run python backend/ml/train_local.py"""
+    return jsonify({
+        'success': False,
+        'error': 'Model training through web interface is disabled. Please run the local training script in VS Code: python backend/ml/train_local.py'
+    }), 403
 
 
 
@@ -1226,37 +1213,11 @@ def admin_edubloom_summary():
 @app.route('/api/admin/models/train', methods=['POST'])
 @admin_required
 def admin_train_model():
-    """
-    Train a Random Forest classifier using TF-IDF text features on Tamil Nadu State Board or Combined data.
-    Trains only tasks with valid target labels (bloom_level or difficulty).
-    Outputs held-out test evaluation, confusion matrix, and registers version (Admin Only).
-    """
-    data = request.get_json() or {}
-    task_name = data.get('task_name') or 'bloom_level'
-    dataset_source = data.get('dataset_source') or 'db'
-    n_estimators = int(data.get('n_estimators') or 100)
-    auto_activate = bool(data.get('auto_activate', False))
-    sample_limit = data.get('sample_limit')
-    if sample_limit is not None:
-        try:
-            sample_limit = int(sample_limit)
-        except (ValueError, TypeError):
-            sample_limit = None
-    is_candidate = data.get('is_candidate')
-    
-    result = train_random_forest_pipeline(
-        task_name=task_name,
-        dataset_source=dataset_source,
-        n_estimators=n_estimators,
-        sample_limit=sample_limit,
-        user_id=g.current_user.id,
-        auto_activate=auto_activate,
-        is_candidate=is_candidate
-    )
-    
-    if not result['success']:
-        return jsonify(result), 400
-    return jsonify(result), 201
+    """Model training through web interface is disabled. Run python backend/ml/train_local.py"""
+    return jsonify({
+        'success': False,
+        'error': 'Model training through web interface is disabled. Please run the local training script in VS Code: python backend/ml/train_local.py'
+    }), 403
 
 
 @app.route('/api/admin/models/versions', methods=['GET'])

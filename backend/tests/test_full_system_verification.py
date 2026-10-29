@@ -127,7 +127,7 @@ class FullSystemVerificationTests(unittest.TestCase):
         self.assertEqual(rep['invalid_rows_count'], 2)
         self.assertTrue(len(rep['errors_sample']) > 0)
 
-    # Criterion 4 & 5: Random Forest training on labelled data & held-out test evaluation
+    # Criterion 4 & 5: Web training is disabled (403) and local training script trains RF with held-out test evaluation
     def test_criterion_04_and_05_rf_training_and_held_out_evaluation(self):
         a_token = self._get_admin_token()
         resp = self.client.post('/api/admin/models/train', headers={'Authorization': f'Bearer {a_token}'}, json={
@@ -135,8 +135,18 @@ class FullSystemVerificationTests(unittest.TestCase):
             'n_estimators': 50,
             'auto_activate': False
         })
-        self.assertEqual(resp.status_code, 201)
-        res = resp.get_json()
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('disabled', resp.get_json()['error'])
+
+        # Verify underlying ML training pipeline and held-out evaluation directly
+        res = train_random_forest_pipeline(
+            task_name='bloom_level',
+            dataset_source='db',
+            n_estimators=20,
+            sample_limit=100,
+            auto_activate=False,
+            is_candidate=True
+        )
         self.assertTrue(res['success'])
         eval_metrics = res['evaluation']
         self.assertIn('test_accuracy', eval_metrics)

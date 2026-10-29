@@ -12,7 +12,6 @@ import HistoryPage from './pages/History';
 import SettingsPage from './pages/SettingsPage';
 import AdminStaff from './pages/AdminStaff';
 import DatasetManagement from './pages/DatasetManagement';
-import ModelTraining from './pages/ModelTraining';
 import ChairmanDashboard from './pages/ChairmanDashboard';
 import PrincipalTeachers from './pages/PrincipalTeachers';
 
@@ -158,21 +157,11 @@ export default function App() {
           }
         />
 
-        <Route
-          path="/admin/models"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <Layout>
-                <ModelTraining />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-
         {/* Backward Compatibility & Fallback Redirects */}
+        <Route path="/admin/models" element={<Navigate to="/dashboard" replace />} />
         <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/model-performance" element={<Navigate to="/admin/models" replace />} />
-        <Route path="/performance" element={<Navigate to="/admin/models" replace />} />
+        <Route path="/model-performance" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/performance" element={<Navigate to="/dashboard" replace />} />
         <Route path="/classification" element={<Navigate to="/question-bank" replace />} />
         <Route path="/classify" element={<Navigate to="/question-bank" replace />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

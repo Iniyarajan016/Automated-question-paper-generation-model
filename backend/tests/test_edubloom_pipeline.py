@@ -204,14 +204,21 @@ class TestEduBloomPipeline(unittest.TestCase):
         self.assertTrue(data_val['success'])
         self.assertEqual(data_val['valid_usable_rows'], 73712)
 
-        # 3. Candidate training endpoint
+        # 3. Candidate training endpoint is disabled via web API (returns 403)
         resp_train = self.client.post('/api/admin/edubloom/train-candidate', headers=headers, json={
             'task_name': 'bloom_level',
             'sample_limit': 60,
             'n_estimators': 10
         })
-        self.assertEqual(resp_train.status_code, 201)
-        data_train = resp_train.get_json()
+        self.assertEqual(resp_train.status_code, 403)
+        self.assertIn('disabled', resp_train.get_json()['error'])
+
+        # Direct underlying service function works for local scripts
+        data_train = train_edubloom_candidate_model(
+            task_name='bloom_level',
+            sample_limit=60,
+            n_estimators=10
+        )
         self.assertTrue(data_train['is_candidate'])
         self.assertFalse(data_train['is_active'])
         self.assertTrue(data_train['promotion_required'])
@@ -314,13 +321,21 @@ class TestEduBloomPipeline(unittest.TestCase):
         self.assertEqual(r_sum.status_code, 200)
         self.assertEqual(r_sum.get_json()['final_combined_row_count'], 74716)
 
+        # Combined training endpoint is disabled via web API (returns 403)
         r_train = self.client.post('/api/admin/combined/train-candidate', headers=a_headers, json={
             'task_name': 'bloom_level',
             'sample_limit': 60,
             'n_estimators': 10
         })
-        self.assertEqual(r_train.status_code, 201)
-        data = r_train.get_json()
+        self.assertEqual(r_train.status_code, 403)
+        self.assertIn('disabled', r_train.get_json()['error'])
+
+        # Direct underlying service function works for local scripts
+        data = train_combined_candidate_model(
+            task_name='bloom_level',
+            sample_limit=60,
+            n_estimators=10
+        )
         self.assertTrue(data['is_candidate'])
         self.assertFalse(data['is_active'])
 

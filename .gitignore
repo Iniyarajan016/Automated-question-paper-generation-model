@@ -14,3 +14,6 @@ backend/data/uploads/*
 node_modules/
 dist/
 .DS_Store
+backend/models/rf-*.joblib
+backend/test_pdf_layout.py
+backend/inspect_db.py

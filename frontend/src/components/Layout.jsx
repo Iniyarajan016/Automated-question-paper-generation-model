@@ -81,7 +81,6 @@ export default function Layout({ children }) {
           { name: 'System Overview', path: '/dashboard', icon: LayoutDashboard, badge: 'Overview' },
           { name: 'Staff Management', path: '/admin/staff', icon: ShieldCheck, badge: 'Staff' },
           { name: 'Dataset Management', path: '/admin/datasets', icon: FolderUp, badge: 'CSV' },
-          { name: 'Model Training (RF)', path: '/admin/models', icon: Cpu, badge: 'RF' },
         ]
       },
       {
@@ -225,13 +224,11 @@ export default function Layout({ children }) {
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
                 isChairman
                   ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                  : isPrincipal
+                  : (isPrincipal || isAdmin)
                   ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : isAdmin
-                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                   : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
               }`}>
-                {user?.full_name ? user.full_name.charAt(0).toUpperCase() : (isChairman ? 'C' : isPrincipal ? 'P' : isAdmin ? 'A' : 'T')}
+                {user?.full_name ? user.full_name.charAt(0).toUpperCase() : (isChairman ? 'C' : (isPrincipal || isAdmin) ? 'P' : 'T')}
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-slate-200 truncate">
@@ -239,9 +236,9 @@ export default function Layout({ children }) {
                 </div>
                 <div className="text-[10px] text-slate-400 flex items-center gap-1.5 font-mono">
                   <span className={`w-1.5 h-1.5 rounded-full ${
-                    isChairman ? 'bg-purple-400' : isPrincipal ? 'bg-emerald-400' : isAdmin ? 'bg-amber-400' : 'bg-blue-400'
+                    isChairman ? 'bg-purple-400' : (isPrincipal || isAdmin) ? 'bg-emerald-400' : 'bg-blue-400'
                   }`} />
-                  <span className="uppercase">{user?.role || 'Teacher'}</span>
+                  <span className="uppercase">{(isPrincipal || isAdmin) ? 'Principal' : isChairman ? 'Chairman' : (user?.role || 'Teacher')}</span>
                 </div>
               </div>
             </div>
@@ -286,14 +283,9 @@ export default function Layout({ children }) {
                 Chairman
               </span>
             )}
-            {isPrincipal && (
+            {(isPrincipal || isAdmin) && (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
                 Principal
-              </span>
-            )}
-            {isAdmin && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
-                Administrator
               </span>
             )}
           </div>

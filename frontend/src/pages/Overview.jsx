@@ -373,17 +373,17 @@ export default function Overview() {
           </div>
 
           {/* Quick Management Links */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Link
               to="/admin/staff"
-              className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition-all group"
+              className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-emerald-500 hover:shadow-md transition-all group"
             >
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
                 <ShieldCheck className="w-5 h-5" />
               </div>
-              <h3 className="font-bold text-sm text-slate-900 mb-1">Staff Management</h3>
+              <h3 className="font-bold text-sm text-slate-900 mb-1">Faculty & Staff Management</h3>
               <p className="text-xs text-slate-500">
-                Add faculty members, configure subject assignments, and manage access credentials.
+                Register teaching staff, assign authorized curriculum subjects, and manage access credentials.
               </p>
             </Link>
 
@@ -391,70 +391,57 @@ export default function Overview() {
               to="/admin/datasets"
               className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition-all group"
             >
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
                 <FolderUp className="w-5 h-5" />
               </div>
-              <h3 className="font-bold text-sm text-slate-900 mb-1">Dataset Management</h3>
+              <h3 className="font-bold text-sm text-slate-900 mb-1">Dataset Management & Ingestion</h3>
               <p className="text-xs text-slate-500">
-                Upload CSV question papers, map schema columns, deduplicate, and run validation audits.
-              </p>
-            </Link>
-
-            <Link
-              to="/admin/models"
-              className="p-5 rounded-2xl bg-white border border-slate-200/80 hover:border-blue-500 hover:shadow-md transition-all group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-                <Cpu className="w-5 h-5" />
-              </div>
-              <h3 className="font-bold text-sm text-slate-900 mb-1">Model Training (Random Forest)</h3>
-              <p className="text-xs text-slate-500">
-                Train TF-IDF + Random Forest pipelines, review held-out test metrics and activate versioned artifacts.
+                Upload Tamil Nadu State Board CSV question papers, audit column mappings, and ingest verified questions into the Question Bank.
               </p>
             </Link>
           </div>
 
-          {/* Active Models & Recent Activity */}
+          {/* System Telemetry & Recent Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Active Model Status */}
+            {/* Question Bank Coverage Card */}
             <div className="p-6 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-4">
               <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-blue-600" />
-                <span>Active Production Models (Random Forest)</span>
+                <Database className="w-4 h-4 text-emerald-600" />
+                <span>Tamil Nadu State Board Question Bank Coverage</span>
               </h3>
 
               <div className="space-y-3">
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-bold text-slate-800">Bloom's Taxonomy Classifier</div>
+                    <div className="text-xs font-bold text-slate-800">Verified Curriculum Items</div>
                     <div className="text-[11px] text-slate-500">
-                      Version: {stats?.active_models?.bloom?.version || 'Default Active Pipeline'}
+                      Standard syllabus questions for Classes 6 to 12
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    Live
+                  <span className="text-lg font-bold font-mono text-emerald-700">
+                    {stats?.total_tn_questions || 0}
                   </span>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
                   <div>
-                    <div className="text-xs font-bold text-slate-800">Difficulty Classifier</div>
+                    <div className="text-xs font-bold text-slate-800">Local Training Pipeline</div>
                     <div className="text-[11px] text-slate-500">
-                      Version: {stats?.active_models?.difficulty?.version || 'Default Active Pipeline'}
+                      Model training managed locally in VS Code (script-driven)
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    Live
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-300">
+                    Local Only
                   </span>
                 </div>
               </div>
 
               <div className="pt-2">
                 <Link
-                  to="/admin/models"
+                  to="/question-bank"
                   className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                 >
-                  <span>View full evaluation reports & confusion matrices</span>
+                  <span>Browse authorized question bank repository</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>

@@ -85,17 +85,17 @@ def auth_required(f):
 
 def admin_required(f):
     """
-    Decorator to enforce Administrator privileges.
-    Guarantees that teachers cannot access administrative endpoints.
+    Decorator to enforce Principal/Administrator privileges.
+    Guarantees that teachers and chairman cannot access administrative endpoints.
     Returns HTTP 403 Forbidden with descriptive error if non-admin attempts access.
     """
     @wraps(f)
     @auth_required
     def decorated(*args, **kwargs):
         current_user = getattr(g, 'current_user', None)
-        if not current_user or current_user.role != 'admin':
+        if not current_user or current_user.role not in ['admin', 'principal']:
             return jsonify({
-                'error': 'Access forbidden. Administrator privileges are required to perform this action.',
+                'error': 'Access forbidden. Principal or Administrator privileges are required to perform this action.',
                 'role': current_user.role if current_user else 'anonymous'
             }), 403
         return f(*args, **kwargs)

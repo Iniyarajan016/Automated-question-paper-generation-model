@@ -2,8 +2,8 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function ProtectedRoute({ children, requiredRole }) {
-  const { isAuthenticated, loading, user, isAdmin } = useAuth();
+export default function ProtectedRoute({ children, requiredRole, allowedRoles }) {
+  const { isAuthenticated, loading, user, isAdmin, isChairman, isPrincipal, isTeacher } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -21,8 +21,26 @@ export default function ProtectedRoute({ children, requiredRole }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If endpoint requires admin and user is not admin, redirect to teacher dashboard
+  // Check explicit allowedRoles array if provided
+  if (allowedRoles && Array.isArray(allowedRoles) && !allowedRoles.includes(user?.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Role checks for specific required roles
   if (requiredRole === 'admin' && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requiredRole === 'chairman' && !isChairman) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requiredRole === 'principal' && (!isPrincipal && !isAdmin)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Chairman is strictly blocked from teacher/generator routes
+  if (requiredRole === 'teacher' && isChairman) {
     return <Navigate to="/dashboard" replace />;
   }
 

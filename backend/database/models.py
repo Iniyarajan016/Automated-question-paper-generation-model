@@ -30,6 +30,24 @@ class User(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    @property
+    def assigned_subjects(self):
+        """Return list of assigned subjects parsed safely from subject_specialization."""
+        if not self.subject_specialization:
+            return []
+        raw = str(self.subject_specialization).strip()
+        if not raw:
+            return []
+        if raw.startswith('[') and raw.endswith(']'):
+            try:
+                import json
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [str(s).strip() for s in parsed if str(s).strip()]
+            except Exception:
+                pass
+        return [s.strip() for s in raw.split(',') if s.strip()]
+
     def to_dict(self):
         """Safe dictionary representation — never return password hash."""
         return {
@@ -39,6 +57,7 @@ class User(Base):
             'phone': self.phone,
             'role': self.role,
             'subject_specialization': self.subject_specialization,
+            'assigned_subjects': self.assigned_subjects,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -253,6 +272,7 @@ class GeneratedPaper(Base):
     
     # Generated result
     questions_json = Column(JSON, nullable=True)  # List of selected question dicts
+    sections_json = Column(JSON, nullable=True)  # List of section definitions with questions
     pdf_filename = Column(String(300), nullable=True)
     
     # Status
@@ -277,6 +297,7 @@ class GeneratedPaper(Base):
             'bloom_level': self.bloom_level,
             'difficulty': self.difficulty,
             'questions_json': self.questions_json,
+            'sections': self.sections_json,
             'pdf_filename': self.pdf_filename,
             'status': self.status,
             'created_by_user_id': self.created_by_user_id,

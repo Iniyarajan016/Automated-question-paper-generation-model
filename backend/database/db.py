@@ -48,6 +48,7 @@ def safe_migrate_existing_tables():
         ('questions', 'updated_at', 'DATETIME'),
         ('generated_papers', 'duration_minutes', 'INTEGER DEFAULT 90'),
         ('generated_papers', 'created_by_user_id', 'INTEGER'),
+        ('generated_papers', 'sections_json', 'JSON'),
     ]
 
     for table, col_name, col_type in column_checks:

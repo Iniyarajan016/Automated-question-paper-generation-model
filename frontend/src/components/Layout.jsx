@@ -16,7 +16,9 @@ import {
   FolderUp,
   SlidersHorizontal,
   ChevronRight,
-  Menu
+  Menu,
+  Users,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,54 +26,101 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, isAdmin, logout } = useAuth();
+  const { user, isAdmin, isPrincipal, isChairman, logout } = useAuth();
 
   // Role-scoped navigation definition
-  const navigationGroups = isAdmin
-    ? [
-        {
-          title: 'Administration',
-          items: [
-            { name: 'System Overview', path: '/dashboard', icon: LayoutDashboard, badge: 'Overview' },
-            { name: 'Staff Management', path: '/admin/staff', icon: ShieldCheck, badge: 'Staff' },
-            { name: 'Dataset Management', path: '/admin/datasets', icon: FolderUp, badge: 'CSV' },
-            { name: 'Model Training (RF)', path: '/admin/models', icon: Cpu, badge: 'RF' },
-          ]
-        },
-        {
-          title: 'Assessment Studio',
-          items: [
-            { name: 'Question Generator', path: '/generate-paper', icon: FileSpreadsheet, badge: 'TN 6–12' },
-            { name: 'Paper Preview', path: '/preview', icon: FileText, badge: null },
-            { name: 'Question Bank', path: '/question-bank', icon: Database, badge: null },
-          ]
-        },
-        {
-          title: 'Archive & Setup',
-          items: [
-            { name: 'Generation History', path: '/history', icon: History, badge: null },
-            { name: 'System Telemetry', path: '/settings', icon: Settings, badge: null },
-          ]
-        }
-      ]
-    : [
-        {
-          title: 'Assessment Engine',
-          items: [
-            { name: 'Faculty Dashboard', path: '/dashboard', icon: LayoutDashboard, badge: null },
-            { name: 'Generate Paper', path: '/generate-paper', icon: FileSpreadsheet, badge: 'TN 6–12' },
-            { name: 'Paper Preview', path: '/preview', icon: FileText, badge: null },
-            { name: 'Question Bank', path: '/question-bank', icon: Database, badge: null },
-          ]
-        },
-        {
-          title: 'My Records',
-          items: [
-            { name: 'My Generated Papers', path: '/history', icon: History, badge: null },
-            { name: 'Faculty Profile', path: '/settings', icon: Settings, badge: null },
-          ]
-        }
-      ];
+  let navigationGroups = [];
+
+  if (isChairman) {
+    navigationGroups = [
+      {
+        title: 'Institutional Governance',
+        items: [
+          { name: 'Institutional Overview', path: '/dashboard', icon: LayoutDashboard, badge: 'Chairman' },
+          { name: 'Principal Accounts', path: '/chairman/principals', icon: ShieldCheck, badge: 'Admin' },
+          { name: 'Faculty Analytics', path: '/chairman/teacher-stats', icon: BarChart3, badge: 'Stats' },
+        ]
+      },
+      {
+        title: 'Account',
+        items: [
+          { name: 'Profile & Security', path: '/settings', icon: Settings, badge: null },
+        ]
+      }
+    ];
+  } else if (isPrincipal) {
+    navigationGroups = [
+      {
+        title: 'School Administration',
+        items: [
+          { name: 'Principal Dashboard', path: '/dashboard', icon: LayoutDashboard, badge: 'Overview' },
+          { name: 'Teacher Management', path: '/principal/teachers', icon: Users, badge: 'Staff' },
+        ]
+      },
+      {
+        title: 'Assessment Studio',
+        items: [
+          { name: 'Question Generator', path: '/generate-paper', icon: FileSpreadsheet, badge: 'TN 6–12' },
+          { name: 'Paper Preview', path: '/preview', icon: FileText, badge: null },
+          { name: 'Question Bank', path: '/question-bank', icon: Database, badge: null },
+        ]
+      },
+      {
+        title: 'Archive & Setup',
+        items: [
+          { name: 'Generation History', path: '/history', icon: History, badge: null },
+          { name: 'Faculty Profile', path: '/settings', icon: Settings, badge: null },
+        ]
+      }
+    ];
+  } else if (isAdmin) {
+    navigationGroups = [
+      {
+        title: 'Administration',
+        items: [
+          { name: 'System Overview', path: '/dashboard', icon: LayoutDashboard, badge: 'Overview' },
+          { name: 'Staff Management', path: '/admin/staff', icon: ShieldCheck, badge: 'Staff' },
+          { name: 'Dataset Management', path: '/admin/datasets', icon: FolderUp, badge: 'CSV' },
+          { name: 'Model Training (RF)', path: '/admin/models', icon: Cpu, badge: 'RF' },
+        ]
+      },
+      {
+        title: 'Assessment Studio',
+        items: [
+          { name: 'Question Generator', path: '/generate-paper', icon: FileSpreadsheet, badge: 'TN 6–12' },
+          { name: 'Paper Preview', path: '/preview', icon: FileText, badge: null },
+          { name: 'Question Bank', path: '/question-bank', icon: Database, badge: null },
+        ]
+      },
+      {
+        title: 'Archive & Setup',
+        items: [
+          { name: 'Generation History', path: '/history', icon: History, badge: null },
+          { name: 'System Telemetry', path: '/settings', icon: Settings, badge: null },
+        ]
+      }
+    ];
+  } else {
+    // Default: Teacher
+    navigationGroups = [
+      {
+        title: 'Assessment Engine',
+        items: [
+          { name: 'Faculty Dashboard', path: '/dashboard', icon: LayoutDashboard, badge: null },
+          { name: 'Generate Paper', path: '/generate-paper', icon: FileSpreadsheet, badge: 'TN 6–12' },
+          { name: 'Paper Preview', path: '/preview', icon: FileText, badge: null },
+          { name: 'Question Bank', path: '/question-bank', icon: Database, badge: null },
+        ]
+      },
+      {
+        title: 'My Records',
+        items: [
+          { name: 'My Generated Papers', path: '/history', icon: History, badge: null },
+          { name: 'Faculty Profile', path: '/settings', icon: Settings, badge: null },
+        ]
+      }
+    ];
+  }
 
   // Active navigation indicator
   let currentNav = { name: 'Dashboard' };
@@ -174,16 +223,24 @@ export default function Layout({ children }) {
           <div className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/60">
             <div className="flex items-center gap-3 min-w-0">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                isAdmin ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                isChairman
+                  ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                  : isPrincipal
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : isAdmin
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
               }`}>
-                {user?.full_name ? user.full_name.charAt(0).toUpperCase() : (isAdmin ? 'A' : 'T')}
+                {user?.full_name ? user.full_name.charAt(0).toUpperCase() : (isChairman ? 'C' : isPrincipal ? 'P' : isAdmin ? 'A' : 'T')}
               </div>
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-slate-200 truncate">
                   {user?.full_name || user?.email || 'User'}
                 </div>
                 <div className="text-[10px] text-slate-400 flex items-center gap-1.5 font-mono">
-                  <span className={`w-1.5 h-1.5 rounded-full ${isAdmin ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    isChairman ? 'bg-purple-400' : isPrincipal ? 'bg-emerald-400' : isAdmin ? 'bg-amber-400' : 'bg-blue-400'
+                  }`} />
                   <span className="uppercase">{user?.role || 'Teacher'}</span>
                 </div>
               </div>
@@ -224,6 +281,16 @@ export default function Layout({ children }) {
               <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
               <span>Tamil Nadu State Board (Classes 6–12)</span>
             </div>
+            {isChairman && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300">
+                Chairman
+              </span>
+            )}
+            {isPrincipal && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                Principal
+              </span>
+            )}
             {isAdmin && (
               <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
                 Administrator

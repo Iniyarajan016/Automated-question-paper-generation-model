@@ -110,6 +110,7 @@ def select_questions(
     difficulty_distribution=None,  # e.g., {'Easy': 30, 'Medium': 50, 'Hard': 20}
     bloom_distribution=None,        # e.g., {'Remember': 25, 'Understand': 35, ...}
     duration_minutes=None,
+    sections_config=None,           # Dynamic section definitions: [{'label': 'A', 'marks_per_question': 1, 'num_questions': 5}, ...]
     seed=None
 ):
     """
@@ -257,176 +258,242 @@ def select_questions(
             'warnings': warnings
         }
 
-    # Step 4: Determine target count & target total marks
-    target_count = num_questions or 10
-    if target_count > len(eligible):
-        warnings.append(
-            f"Requested {target_count} questions, but only {len(eligible)} are available in the Tamil Nadu question bank for this criteria. "
-            f"Selecting all {len(eligible)} eligible questions."
-        )
-        target_count = len(eligible)
-
-    target_total = format_mark(total_marks) if total_marks is not None else format_mark(target_count * 2)
-
-    # Step 5: Mark-Optimized & Distribution-Aware Selection
-    shuffled_pool = list(eligible)
-    random.shuffle(shuffled_pool)
-
-    # Classify pool into standard mark buckets: 1, 2, 3, 5
-    mark_buckets = {1: [], 2: [], 3: [], 5: []}
-    for q in shuffled_pool:
-        m = q.get('marks')
-        if m is None or m <= 1.5:
-            mark_buckets[1].append(q)
-        elif m <= 2.5:
-            mark_buckets[2].append(q)
-        elif m <= 3.5:
-            mark_buckets[3].append(q)
-        else:
-            mark_buckets[5].append(q)
-
-    avail_counts = {k: len(v) for k, v in mark_buckets.items()}
-    solution = _solve_mark_counts(target_count, target_total, avail_counts)
-
+    # Step 4 & 5: Selection based on Dynamic Section Config OR Legacy Distribution Solver
+    sections = []
+    ordered_questions = []
     selected = []
-    if solution:
-        n1, n2, n3, n5 = solution
-        selected.extend(mark_buckets[1][:n1])
-        selected.extend(mark_buckets[2][:n2])
-        selected.extend(mark_buckets[3][:n3])
-        selected.extend(mark_buckets[5][:n5])
-    else:
-        # Fallback to proportional difficulty/bloom distribution sampling
-        if difficulty_distribution and isinstance(difficulty_distribution, dict) and sum(difficulty_distribution.values()) > 0:
-            total_pct = sum(difficulty_distribution.values())
-            diff_buckets = {'Easy': [], 'Medium': [], 'Hard': []}
-            for q in shuffled_pool:
-                d = q.get('difficulty', 'Medium')
-                diff_buckets.setdefault(d, []).append(q)
 
-            sampled_ids = set()
-            for diff_key, pct in difficulty_distribution.items():
-                wanted = int(round((pct / total_pct) * target_count))
-                avail = diff_buckets.get(diff_key, [])
-                for q in avail[:wanted]:
-                    if q.get('id') not in sampled_ids and len(selected) < target_count:
+    if sections_config and isinstance(sections_config, list) and len(sections_config) > 0:
+        sec_expected_q_count = sum(int(s.get('num_questions', 0)) for s in sections_config)
+        sec_expected_total_marks = format_mark(sum(format_mark(s.get('marks_per_question', 1)) * int(s.get('num_questions', 0)) for s in sections_config))
+
+        if total_marks is not None and abs(float(sec_expected_total_marks) - float(total_marks)) > 0.01:
+            return {
+                'success': False,
+                'is_valid': False,
+                'error': f"Total section marks ({sec_expected_total_marks}) do not match the specified examination total marks ({total_marks}). Please adjust section question counts or maximum marks.",
+                'eligible_count': len(eligible),
+                'selected_questions': []
+            }
+
+        topic_label = f" (Portions: {', '.join(sorted(all_topics))})" if all_topics else ""
+        selected_ids = set()
+
+        for idx, sec_def in enumerate(sections_config):
+            label = chr(ord('A') + idx)
+            m_val = format_mark(sec_def.get('marks_per_question', 1))
+            req_n = int(sec_def.get('num_questions', 0))
+            if req_n <= 0:
+                continue
+
+            sec_candidates = [
+                q for q in eligible
+                if format_mark(q.get('marks', 2)) == m_val and (q.get('id') or q.get('question_id')) not in selected_ids
+            ]
+
+            if len(sec_candidates) < req_n:
+                shortage = req_n - len(sec_candidates)
+                return {
+                    'success': False,
+                    'is_valid': False,
+                    'error': f"Insufficient questions for Section {label}: Need {shortage} more {m_val}-mark question(s) for {class_grade or 'selected class'} {subject or ''}{topic_label}. (Available: {len(sec_candidates)}, Required: {req_n}).",
+                    'eligible_count': len(eligible),
+                    'selected_questions': []
+                }
+
+            shuffled_cand = list(sec_candidates)
+            random.shuffle(shuffled_cand)
+            chosen_for_sec = shuffled_cand[:req_n]
+
+            for q in chosen_for_sec:
+                selected_ids.add(q.get('id') or q.get('question_id'))
+                selected.append(q)
+
+            sec_total_marks = format_mark(req_n * m_val)
+            name_suffix = f"{m_val}-MARK QUESTIONS" if m_val > 1 else "OBJECTIVE & VERY SHORT ANSWER QUESTIONS"
+            default_inst = f"Answer all questions. Each question carries {m_val} mark{'s' if m_val != 1 else ''}. ({req_n} × {m_val} = {sec_total_marks} Marks)"
+
+            sections.append({
+                'label': label,
+                'name': f"SECTION {label} — {sec_def.get('title') or name_suffix}",
+                'instructions': sec_def.get('instructions') or default_inst,
+                'questions': chosen_for_sec,
+                'marks_per_question': m_val,
+                'num_questions': req_n,
+                'total_section_marks': sec_total_marks
+            })
+
+        global_num = 1
+        for sec in sections:
+            for q in sec['questions']:
+                q['display_number'] = global_num
+                ordered_questions.append(q)
+                global_num += 1
+
+        actual_total = format_mark(sum(s['total_section_marks'] for s in sections))
+        target_count = len(ordered_questions)
+        target_total = actual_total
+    else:
+        # Legacy Solver Mode
+        target_count = num_questions or 10
+        if target_count > len(eligible):
+            warnings.append(
+                f"Requested {target_count} questions, but only {len(eligible)} are available in the Tamil Nadu question bank for this criteria. "
+                f"Selecting all {len(eligible)} eligible questions."
+            )
+            target_count = len(eligible)
+
+        target_total = format_mark(total_marks) if total_marks is not None else format_mark(target_count * 2)
+
+        shuffled_pool = list(eligible)
+        random.shuffle(shuffled_pool)
+
+        mark_buckets = {1: [], 2: [], 3: [], 5: []}
+        for q in shuffled_pool:
+            m = q.get('marks')
+            if m is None or m <= 1.5:
+                mark_buckets[1].append(q)
+            elif m <= 2.5:
+                mark_buckets[2].append(q)
+            elif m <= 3.5:
+                mark_buckets[3].append(q)
+            else:
+                mark_buckets[5].append(q)
+
+        avail_counts = {k: len(v) for k, v in mark_buckets.items()}
+        solution = _solve_mark_counts(target_count, target_total, avail_counts)
+
+        if solution:
+            n1, n2, n3, n5 = solution
+            selected.extend(mark_buckets[1][:n1])
+            selected.extend(mark_buckets[2][:n2])
+            selected.extend(mark_buckets[3][:n3])
+            selected.extend(mark_buckets[5][:n5])
+        else:
+            if difficulty_distribution and isinstance(difficulty_distribution, dict) and sum(difficulty_distribution.values()) > 0:
+                total_pct = sum(difficulty_distribution.values())
+                diff_buckets = {'Easy': [], 'Medium': [], 'Hard': []}
+                for q in shuffled_pool:
+                    d = q.get('difficulty', 'Medium')
+                    diff_buckets.setdefault(d, []).append(q)
+
+                sampled_ids = set()
+                for diff_key, pct in difficulty_distribution.items():
+                    wanted = int(round((pct / total_pct) * target_count))
+                    avail = diff_buckets.get(diff_key, [])
+                    for q in avail[:wanted]:
+                        if q.get('id') not in sampled_ids and len(selected) < target_count:
+                            selected.append(q)
+                            sampled_ids.add(q.get('id'))
+
+                for q in shuffled_pool:
+                    if len(selected) >= target_count:
+                        break
+                    if q.get('id') not in sampled_ids:
                         selected.append(q)
                         sampled_ids.add(q.get('id'))
+            else:
+                selected = shuffled_pool[:target_count]
 
-            for q in shuffled_pool:
-                if len(selected) >= target_count:
-                    break
-                if q.get('id') not in sampled_ids:
-                    selected.append(q)
-                    sampled_ids.add(q.get('id'))
-        else:
-            selected = shuffled_pool[:target_count]
+            cur_total = sum(format_mark(q.get('marks', 2)) for q in selected)
+            diff = target_total - cur_total
+            if diff != 0 and selected:
+                idx = 0
+                step = 1 if diff > 0 else -1
+                rem = abs(int(diff))
+                while rem > 0 and idx < len(selected) * 3:
+                    q_to_adj = selected[idx % len(selected)]
+                    cur_m = format_mark(q_to_adj.get('marks', 2))
+                    new_m = cur_m + step
+                    if 1 <= new_m <= 10:
+                        q_to_adj['marks'] = format_mark(new_m)
+                        rem -= 1
+                    idx += 1
+                warnings.append(
+                    f"Normalized question marks so that section totals equal the configured maximum marks of {target_total}."
+                )
 
-        # Balance marks to equal target_total exactly
-        cur_total = sum(format_mark(q.get('marks', 2)) for q in selected)
-        diff = target_total - cur_total
-        if diff != 0 and selected:
-            # Adjust marks smoothly across questions
-            idx = 0
-            step = 1 if diff > 0 else -1
-            rem = abs(int(diff))
-            while rem > 0 and idx < len(selected) * 3:
-                q_to_adj = selected[idx % len(selected)]
-                cur_m = format_mark(q_to_adj.get('marks', 2))
-                new_m = cur_m + step
-                if 1 <= new_m <= 10:
-                    q_to_adj['marks'] = format_mark(new_m)
-                    rem -= 1
-                idx += 1
-            warnings.append(
-                f"Normalized question marks so that section totals equal the configured maximum marks of {target_total}."
-            )
-
-    # Ensure all questions have formatted integer/clean marks
-    for q in selected:
-        q['marks'] = format_mark(q.get('marks', 2))
-
-    actual_total = format_mark(sum(q['marks'] for q in selected))
-
-    # Step 6: Partition into Sections with STRICT Continuous Sequential Numbering
-    section_a = []
-    section_b = []
-    section_c = []
-
-    for q in selected:
-        m = q.get('marks') or 2
-        if m <= 1.5:
-            section_a.append(q)
-        elif m <= 3.5:
-            section_b.append(q)
-        else:
-            section_c.append(q)
-
-    sections = []
-    global_num = 1
-    ordered_questions = []
-
-    if section_a:
-        sec_marks = format_mark(sum(q['marks'] for q in section_a))
-        for q in section_a:
-            q['display_number'] = global_num
-            ordered_questions.append(q)
-            global_num += 1
-        sections.append({
-            'name': 'SECTION A — OBJECTIVE & VERY SHORT ANSWER QUESTIONS',
-            'instructions': f'Answer all questions. Each question carries 1 mark. ({len(section_a)} × 1 = {sec_marks} Marks)',
-            'questions': section_a,
-            'marks_per_question': 1,
-            'total_section_marks': sec_marks
-        })
-
-    if section_b:
-        sec_marks = format_mark(sum(q['marks'] for q in section_b))
-        for q in section_b:
-            q['display_number'] = global_num
-            ordered_questions.append(q)
-            global_num += 1
-        sections.append({
-            'name': 'SECTION B — SHORT ANSWER & CONCEPTUAL QUESTIONS',
-            'instructions': f'Answer all questions. Each question carries 2 or 3 marks as indicated. (Total: {sec_marks} Marks)',
-            'questions': section_b,
-            'total_section_marks': sec_marks
-        })
-
-    if section_c:
-        sec_marks = format_mark(sum(q['marks'] for q in section_c))
-        for q in section_c:
-            q['display_number'] = global_num
-            ordered_questions.append(q)
-            global_num += 1
-        sections.append({
-            'name': 'SECTION C — LONG ANSWER & DETAILED QUESTIONS',
-            'instructions': f'Answer all questions with necessary diagrams and steps. Each question carries 5 marks. ({len(section_c)} × 5 = {sec_marks} Marks)',
-            'questions': section_c,
-            'marks_per_question': 5,
-            'total_section_marks': sec_marks
-        })
-
-    if not sections:
         for q in selected:
-            q['display_number'] = global_num
-            ordered_questions.append(q)
-            global_num += 1
-        sections.append({
-            'name': 'SECTION A — ALL QUESTIONS',
-            'instructions': 'Answer all questions clearly.',
-            'questions': selected,
-            'total_section_marks': actual_total
-        })
-    # Ensure sections are labeled sequentially starting from A
-    for idx, sec in enumerate(sections):
-        label = chr(ord('A') + idx)
-        parts = sec['name'].split('—', 1)
-        if len(parts) == 2:
-            suffix = parts[1].strip()
-            sec['name'] = f'SECTION {label} — {suffix}'
-        else:
-            sec['name'] = f'SECTION {label}'
+            q['marks'] = format_mark(q.get('marks', 2))
+
+        actual_total = format_mark(sum(q['marks'] for q in selected))
+
+        section_a = []
+        section_b = []
+        section_c = []
+
+        for q in selected:
+            m = q.get('marks') or 2
+            if m <= 1.5:
+                section_a.append(q)
+            elif m <= 3.5:
+                section_b.append(q)
+            else:
+                section_c.append(q)
+
+        global_num = 1
+        if section_a:
+            sec_marks = format_mark(sum(q['marks'] for q in section_a))
+            for q in section_a:
+                q['display_number'] = global_num
+                ordered_questions.append(q)
+                global_num += 1
+            sections.append({
+                'name': 'SECTION A — OBJECTIVE & VERY SHORT ANSWER QUESTIONS',
+                'instructions': f'Answer all questions. Each question carries 1 mark. ({len(section_a)} × 1 = {sec_marks} Marks)',
+                'questions': section_a,
+                'marks_per_question': 1,
+                'total_section_marks': sec_marks
+            })
+
+        if section_b:
+            sec_marks = format_mark(sum(q['marks'] for q in section_b))
+            for q in section_b:
+                q['display_number'] = global_num
+                ordered_questions.append(q)
+                global_num += 1
+            sections.append({
+                'name': 'SECTION B — SHORT ANSWER & CONCEPTUAL QUESTIONS',
+                'instructions': f'Answer all questions. Each question carries 2 or 3 marks as indicated. (Total: {sec_marks} Marks)',
+                'questions': section_b,
+                'total_section_marks': sec_marks
+            })
+
+        if section_c:
+            sec_marks = format_mark(sum(q['marks'] for q in section_c))
+            for q in section_c:
+                q['display_number'] = global_num
+                ordered_questions.append(q)
+                global_num += 1
+            sections.append({
+                'name': 'SECTION C — LONG ANSWER & DETAILED QUESTIONS',
+                'instructions': f'Answer all questions with necessary diagrams and steps. Each question carries 5 marks. ({len(section_c)} × 5 = {sec_marks} Marks)',
+                'questions': section_c,
+                'marks_per_question': 5,
+                'total_section_marks': sec_marks
+            })
+
+        if not sections:
+            for q in selected:
+                q['display_number'] = global_num
+                ordered_questions.append(q)
+                global_num += 1
+            sections.append({
+                'name': 'SECTION A — ALL QUESTIONS',
+                'instructions': 'Answer all questions clearly.',
+                'questions': selected,
+                'total_section_marks': actual_total
+            })
+
+        # Ensure sections are strictly labeled sequentially starting from A
+        for idx, sec in enumerate(sections):
+            label = chr(ord('A') + idx)
+            sec['label'] = label
+            cleaned_suffix = re.sub(r'^SECTION\s+[A-Z]\s*[-—]?\s*', '', sec['name'], flags=re.I).strip()
+            if cleaned_suffix:
+                sec['name'] = f'SECTION {label} — {cleaned_suffix}'
+            else:
+                sec['name'] = f'SECTION {label}'
     # Step 7: Pre-Export Validation Verification
     sec_sum = format_mark(sum(s['total_section_marks'] for s in sections))
     numbering_list = [q['display_number'] for q in ordered_questions]

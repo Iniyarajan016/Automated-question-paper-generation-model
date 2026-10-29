@@ -12,9 +12,22 @@ import { api } from '../services/api';
 export default function PaperPreview() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [downloading, setDownloading] = useState(false);
 
   const paperData = location.state?.paper || location.state?.paperData || null;
   const downloadUrl = location.state?.downloadUrl || (paperData?.paper_id ? api.getPaperDownloadUrl(paperData.paper_id) : null);
+
+  const handleDownloadPdf = async () => {
+    if (!paperData?.paper_id) return;
+    try {
+      setDownloading(true);
+      await api.downloadPaperPdf(paperData.paper_id, `${paperData.title || 'examination_paper'}.pdf`);
+    } catch (err) {
+      alert(`Download error: ${err.message}`);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (!paperData) {
     return (
@@ -84,15 +97,14 @@ export default function PaperPreview() {
           </button>
 
           {downloadUrl && (
-            <a
-              href={downloadUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+            <button
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50"
             >
-              <Download className="w-4 h-4" />
-              <span>Download Official Printable PDF</span>
-            </a>
+              <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
+              <span>{downloading ? 'Downloading...' : 'Download Official Printable PDF'}</span>
+            </button>
           )}
         </div>
       </div>
@@ -150,36 +162,49 @@ export default function PaperPreview() {
         {/* Questions Rendered by Section or List */}
         <div className="space-y-8">
           {sections && sections.length > 0 ? (
-            sections.map((sec, sIdx) => (
-              <div key={sIdx} className="space-y-4">
-                <div className="pb-1.5 border-b border-slate-300">
-                  <h3 className="font-bold text-sm tracking-wide text-slate-900 font-sans uppercase">
-                    {sec.name}
-                  </h3>
-                  {sec.instructions && (
-                    <div className="text-[11px] text-slate-500 italic mt-0.5">{sec.instructions}</div>
-                  )}
-                </div>
+            sections.map((sec, sIdx) => {
+              const label = sec.label || String.fromCharCode(65 + sIdx);
+              const secName = sec.name || `SECTION ${label}`;
+              const qCount = (sec.questions || []).length;
+              const markPerQ = sec.marks_per_question || (qCount > 0 ? sec.questions[0]?.marks : 1);
+              const secMarks = sec.total_section_marks || (qCount * markPerQ);
 
-                <div className="space-y-5">
-                  {(sec.questions || []).map((q, qIdx) => (
-                    <div key={q.id || qIdx} className="flex items-start justify-between gap-4 text-xs">
-                      <div className="space-y-1">
-                        <div className="font-serif text-sm leading-relaxed text-slate-900">
-                          <span className="font-bold font-sans mr-2 text-slate-950">
-                            {q.display_number || qIdx + 1}.
-                          </span>
-                          <span>{q.question}</span>
+              return (
+                <div key={sIdx} className="space-y-4">
+                  <div className="pb-1.5 border-b-2 border-slate-900 flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-sm tracking-wide text-slate-950 font-sans uppercase">
+                        {secName}
+                      </h3>
+                      {sec.instructions && (
+                        <div className="text-[11px] text-slate-500 italic mt-0.5">{sec.instructions}</div>
+                      )}
+                    </div>
+                    <div className="text-xs font-mono font-bold text-slate-800">
+                      [{qCount} Questions × {formatMarks(markPerQ)} Marks = {formatMarks(secMarks)} Marks]
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    {(sec.questions || []).map((q, qIdx) => (
+                      <div key={q.id || qIdx} className="flex items-start justify-between gap-4 text-xs">
+                        <div className="space-y-1">
+                          <div className="font-serif text-sm leading-relaxed text-slate-900">
+                            <span className="font-bold font-sans mr-2 text-slate-950">
+                              {q.display_number || qIdx + 1}.
+                            </span>
+                            <span>{q.question}</span>
+                          </div>
+                        </div>
+                        <div className="text-xs font-bold font-mono text-slate-700 shrink-0">
+                          [{formatMarks(q.marks || markPerQ)}]
                         </div>
                       </div>
-                      <div className="text-xs font-bold font-mono text-slate-700 shrink-0">
-                        [{formatMarks(q.marks || 2)}]
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="space-y-5">
               {questions.map((q, idx) => (

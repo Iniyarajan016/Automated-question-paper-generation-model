@@ -13,6 +13,8 @@ import SettingsPage from './pages/SettingsPage';
 import AdminStaff from './pages/AdminStaff';
 import DatasetManagement from './pages/DatasetManagement';
 import ModelTraining from './pages/ModelTraining';
+import ChairmanDashboard from './pages/ChairmanDashboard';
+import PrincipalTeachers from './pages/PrincipalTeachers';
 
 export default function App() {
   return (
@@ -88,6 +90,44 @@ export default function App() {
             <ProtectedRoute>
               <Layout>
                 <SettingsPage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ======================================================= */}
+        {/* CHAIRMAN PROTECTED ROUTES                                */}
+        {/* ======================================================= */}
+        <Route
+          path="/chairman/principals"
+          element={
+            <ProtectedRoute requiredRole="chairman">
+              <Layout>
+                <ChairmanDashboard />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chairman/teacher-stats"
+          element={
+            <ProtectedRoute requiredRole="chairman">
+              <Layout>
+                <ChairmanDashboard />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ======================================================= */}
+        {/* PRINCIPAL PROTECTED ROUTES                               */}
+        {/* ======================================================= */}
+        <Route
+          path="/principal/teachers"
+          element={
+            <ProtectedRoute requiredRole="principal">
+              <Layout>
+                <PrincipalTeachers />
               </Layout>
             </ProtectedRoute>
           }

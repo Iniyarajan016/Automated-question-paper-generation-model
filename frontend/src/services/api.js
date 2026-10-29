@@ -126,18 +126,25 @@ export const api = {
 
   // Tamil Nadu State Board Curriculum
   async getCurriculumClasses() {
-    const res = await fetch(`${API_BASE}/curriculum/classes`);
+    const res = await fetch(`${API_BASE}/curriculum/classes`, {
+      headers: getAuthHeaders()
+    });
     return handleResponse(res);
   },
 
   async getCurriculumSubjects(classGrade) {
-    const res = await fetch(`${API_BASE}/curriculum/subjects?class_grade=${encodeURIComponent(classGrade)}`);
+    const res = await fetch(`${API_BASE}/curriculum/subjects?class_grade=${encodeURIComponent(classGrade)}`, {
+      headers: getAuthHeaders()
+    });
     return handleResponse(res);
   },
 
   async getCurriculumChapters(classGrade, subject) {
     const res = await fetch(
-      `${API_BASE}/curriculum/chapters?class_grade=${encodeURIComponent(classGrade)}&subject=${encodeURIComponent(subject)}`
+      `${API_BASE}/curriculum/chapters?class_grade=${encodeURIComponent(classGrade)}&subject=${encodeURIComponent(subject)}`,
+      {
+        headers: getAuthHeaders()
+      }
     );
     return handleResponse(res);
   },
@@ -349,7 +356,109 @@ export const api = {
   },
 
   getPaperDownloadUrl(paperId) {
-    return `${API_BASE}/papers/${paperId}/download`;
+    const token = authStorage.getToken();
+    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE}/papers/${paperId}/download${tokenQuery}`;
+  },
+
+  async downloadPaperPdf(paperId, filename = null) {
+    const res = await fetch(`${API_BASE}/papers/${paperId}/download`, {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+      let msg = 'Failed to download PDF';
+      try {
+        const err = await res.json();
+        msg = err.error || err.message || msg;
+      } catch {}
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `examforge_paper_${paperId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  // Chairman Institutional Governance Endpoints
+  async getChairmanPrincipals() {
+    const res = await fetch(`${API_BASE}/chairman/principals`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async createChairmanPrincipal(data) {
+    const res = await fetch(`${API_BASE}/chairman/principals`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
+  },
+
+  async updateChairmanPrincipal(id, data) {
+    const res = await fetch(`${API_BASE}/chairman/principals/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
+  },
+
+  async resetChairmanPrincipalPassword(id, password) {
+    const res = await fetch(`${API_BASE}/chairman/principals/${id}/reset-password`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ password })
+    });
+    return handleResponse(res);
+  },
+
+  async getChairmanTeacherStats() {
+    const res = await fetch(`${API_BASE}/chairman/teacher-stats`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  // Principal Faculty & Subject Management Endpoints
+  async getPrincipalTeachers() {
+    const res = await fetch(`${API_BASE}/principal/teachers`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  async createPrincipalTeacher(data) {
+    const res = await fetch(`${API_BASE}/principal/teachers`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
+  },
+
+  async updatePrincipalTeacher(id, data) {
+    const res = await fetch(`${API_BASE}/principal/teachers/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
+  },
+
+  async resetPrincipalTeacherPassword(id, password) {
+    const res = await fetch(`${API_BASE}/principal/teachers/${id}/reset-password`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ password })
+    });
+    return handleResponse(res);
   },
 
   // Admin: EduBloom Dataset Pipeline & Candidate Models

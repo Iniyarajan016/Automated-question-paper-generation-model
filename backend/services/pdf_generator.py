@@ -5,6 +5,7 @@ Produces formal, printable examination papers and teacher summaries.
 
 import os
 import sys
+import re
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -298,34 +299,43 @@ def generate_exam_pdf(
         s_b = [q for q in questions if 1.5 < (q.get('marks') or 2) <= 3.5]
         s_c = [q for q in questions if (q.get('marks') or 2) > 3.5]
 
-        sections = []
+        raw_sections = []
         if s_a:
-            sec_a_marks = format_marks(sum(q.get('marks', 1.0) for q in s_a))
-            sections.append({
-                'name': 'SECTION A (Objective & Very Short Answer)',
-                'instructions': f'Answer all questions. Each question carries 1 mark. ({len(s_a)} × 1 = {sec_a_marks} Marks)',
-                'questions': s_a
-            })
+            raw_sections.append((s_a, '(Objective & Very Short Answer)', 1, 'Each question carries 1 mark.'))
         if s_b:
-            sec_b_marks = format_marks(sum(q.get('marks', 2.0) for q in s_b))
-            sections.append({
-                'name': 'SECTION B (Short Answer & Conceptual)',
-                'instructions': f'Answer all questions. Each question carries 2 or 3 marks as indicated. (Total: {sec_b_marks} Marks)',
-                'questions': s_b
-            })
+            raw_sections.append((s_b, '(Short Answer & Conceptual)', 2, 'Each question carries 2 or 3 marks as indicated.'))
         if s_c:
-            sec_c_marks = format_marks(sum(q.get('marks', 5.0) for q in s_c))
+            raw_sections.append((s_c, '(Long Answer & Descriptive)', 5, 'Answer all questions in detail with necessary diagrams/working. Each carries 5 marks.'))
+        if not raw_sections:
+            raw_sections.append((questions, '', 2, 'Answer all questions.'))
+
+        sections = []
+        for idx, (q_list, title_suf, m_val, inst) in enumerate(raw_sections):
+            label = chr(ord('A') + idx)
+            sec_m = format_marks(sum(q.get('marks', m_val) for q in q_list))
+            sec_name = f'SECTION {label} — {title_suf}'.strip() if title_suf else f'SECTION {label}'
             sections.append({
-                'name': 'SECTION C (Long Answer & Descriptive)',
-                'instructions': f'Answer all questions in detail with necessary diagrams/working. Each carries 5 marks. ({len(s_c)} × 5 = {sec_c_marks} Marks)',
-                'questions': s_c
+                'label': label,
+                'name': sec_name,
+                'instructions': f'Answer all questions. {inst} ({len(q_list)} × {m_val} = {sec_m} Marks)' if m_val else f'Answer all questions. (Total: {sec_m} Marks)',
+                'questions': q_list,
+                'total_section_marks': sec_m
             })
-        if not sections:
-            sections.append({
-                'name': 'ALL SECTIONS',
-                'instructions': 'Answer all questions.',
-                'questions': questions
-            })
+    else:
+        # Strictly normalize section labels to Section A, B, C... in displayed order
+        normalized_sections = []
+        for idx, sec in enumerate(sections):
+            label = chr(ord('A') + idx)
+            sec_copy = dict(sec)
+            sec_copy['label'] = label
+            old_name = sec_copy.get('name', 'SECTION')
+            cleaned_suffix = re.sub(r'^SECTION\s+[A-Z]\s*[-—]?\s*', '', old_name, flags=re.I).strip()
+            if cleaned_suffix:
+                sec_copy['name'] = f'SECTION {label} — {cleaned_suffix}'
+            else:
+                sec_copy['name'] = f'SECTION {label}'
+            normalized_sections.append(sec_copy)
+        sections = normalized_sections
 
     # Continuous sequential numbering across sections
     q_global_num = 1

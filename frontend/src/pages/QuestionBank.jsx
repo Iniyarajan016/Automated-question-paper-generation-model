@@ -50,6 +50,7 @@ export default function QuestionBank() {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedBloom, setSelectedBloom] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
+  const [availableSubjects, setAvailableSubjects] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -90,6 +91,20 @@ export default function QuestionBank() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    async function loadFilters() {
+      try {
+        const filters = await api.getQuestionFilters(selectedClass);
+        if (filters && filters.subjects) {
+          setAvailableSubjects(filters.subjects);
+        }
+      } catch (err) {
+        console.error('Failed to load question filters:', err);
+      }
+    }
+    loadFilters();
+  }, [selectedClass]);
 
   useEffect(() => {
     fetchQuestions();
@@ -184,6 +199,21 @@ export default function QuestionBank() {
             <option value="">All Classes (6–12)</option>
             {TN_CLASSES.map((c) => (
               <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
+          {/* Subject Filter (Restricted by Teacher Assignment) */}
+          <select
+            value={selectedSubject}
+            onChange={(e) => {
+              setSelectedSubject(e.target.value);
+              setPage(1);
+            }}
+            className="px-2.5 py-2 text-xs rounded-lg border border-slate-200 bg-white text-slate-700"
+          >
+            <option value="">All Authorized Subjects</option>
+            {availableSubjects.map((s) => (
+              <option key={s} value={s}>{s}</option>
             ))}
           </select>
 

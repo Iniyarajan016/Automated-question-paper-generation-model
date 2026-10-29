@@ -163,40 +163,52 @@ def select_questions(
         filters_applied.append(f"subject={subject}")
 
     # Step 2: Strict Topics / Syllabus Chapters Filtering
+    import unicodedata
     all_topics = set()
+    display_topics = []
+    
+    def _add_topic_norm(raw_str):
+        if not raw_str or not isinstance(raw_str, str):
+            return
+        s = raw_str.strip()
+        if not s or s.lower() in ['complete syllabus', 'complete syllabus (all chapters)', 'all chapters', 'all']:
+            return
+        nfc_s = unicodedata.normalize('NFC', s)
+        nfd_s = unicodedata.normalize('NFD', s)
+        all_topics.add(nfc_s.lower())
+        all_topics.add(nfd_s.lower())
+        if nfc_s not in display_topics:
+            display_topics.append(nfc_s)
+
     if topics:
         if isinstance(topics, list):
             for t in topics:
                 if t and isinstance(t, str):
                     for sub in t.split(','):
-                        s = sub.strip().lower()
-                        if s:
-                            all_topics.add(s)
+                        _add_topic_norm(sub)
         elif isinstance(topics, str):
             for sub in topics.split(','):
-                s = sub.strip().lower()
-                if s:
-                    all_topics.add(s)
+                _add_topic_norm(sub)
 
     if topic and isinstance(topic, str):
         for sub in topic.split(','):
-            s = sub.strip().lower()
-            if s and s not in ['complete syllabus', 'complete syllabus (all chapters)', 'all chapters', 'all']:
-                all_topics.add(s)
+            _add_topic_norm(sub)
 
     if all_topics:
         in_syllabus = []
         for q in eligible:
-            q_top = str(q.get('topic', '')).strip().lower()
-            if q_top in all_topics:
+            raw_top = str(q.get('topic', '')).strip()
+            q_top_nfc = unicodedata.normalize('NFC', raw_top).lower()
+            q_top_nfd = unicodedata.normalize('NFD', raw_top).lower()
+            if q_top_nfc in all_topics or q_top_nfd in all_topics:
                 in_syllabus.append(q)
             else:
                 warnings.append(
                     f"Question '{q.get('question_id', q.get('id', 'N/A'))}' from chapter '{q.get('topic')}' "
-                    f"excluded: outside selected portions ({', '.join(sorted(all_topics))})."
+                    f"excluded: outside selected portions ({', '.join(sorted(display_topics))})."
                 )
         eligible = in_syllabus
-        filters_applied.append(f"topics={sorted(list(all_topics))}")
+        filters_applied.append(f"topics={sorted(display_topics)}")
 
     # Step 3: Vague & Template Question Quality Filter
     quality_filtered = []
@@ -264,8 +276,19 @@ def select_questions(
     selected = []
 
     if sections_config and isinstance(sections_config, list) and len(sections_config) > 0:
-        sec_expected_q_count = sum(int(s.get('num_questions', 0)) for s in sections_config)
-        sec_expected_total_marks = format_mark(sum(format_mark(s.get('marks_per_question', 1)) * int(s.get('num_questions', 0)) for s in sections_config))
+        def _get_sec_n(s):
+            return int(s.get('num_questions') or s.get('count') or s.get('required_questions') or s.get('questions_count') or 0)
+
+        def _get_sec_m(s):
+            raw = s.get('marks_per_question') if s.get('marks_per_question') is not None else (
+                s.get('marks') if s.get('marks') is not None else (
+                    s.get('mark') if s.get('mark') is not None else 1
+                )
+            )
+            return format_mark(raw)
+
+        sec_expected_q_count = sum(_get_sec_n(s) for s in sections_config)
+        sec_expected_total_marks = format_mark(sum(_get_sec_m(s) * _get_sec_n(s) for s in sections_config))
 
         if total_marks is not None and abs(float(sec_expected_total_marks) - float(total_marks)) > 0.01:
             return {
@@ -276,13 +299,18 @@ def select_questions(
                 'selected_questions': []
             }
 
-        topic_label = f" (Portions: {', '.join(sorted(all_topics))})" if all_topics else ""
+        topic_label = f" (Portions: {', '.join(display_topics)})" if display_topics else ""
         selected_ids = set()
 
         for idx, sec_def in enumerate(sections_config):
             label = chr(ord('A') + idx)
-            m_val = format_mark(sec_def.get('marks_per_question', 1))
-            req_n = int(sec_def.get('num_questions', 0))
+            raw_m = sec_def.get('marks_per_question') if sec_def.get('marks_per_question') is not None else (
+                sec_def.get('marks') if sec_def.get('marks') is not None else (
+                    sec_def.get('mark') if sec_def.get('mark') is not None else 1
+                )
+            )
+            m_val = format_mark(raw_m)
+            req_n = int(sec_def.get('num_questions') or sec_def.get('count') or sec_def.get('required_questions') or 0)
             if req_n <= 0:
                 continue
 

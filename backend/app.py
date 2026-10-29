@@ -1361,24 +1361,38 @@ def get_questions():
                 is_auth, err_resp, status_code = validate_teacher_subject_access(user, subject)
                 if not is_auth:
                     return jsonify(err_resp), status_code
-                query = query.filter(Question.subject == subject)
+                query = query.filter(Question.subject.ilike(subject.strip()))
             else:
+                # Case-insensitive match on assigned subjects
                 query = query.filter(Question.subject.in_(assigned))
         elif user.role == 'chairman':
             return jsonify({'error': 'Access forbidden. Chairman does not browse question bank.'}), 403
         else:
             subject = request.args.get('subject')
             if subject:
-                query = query.filter(Question.subject == subject)
+                query = query.filter(Question.subject.ilike(subject.strip()))
             
         # Mandatory/optional filters
-        class_grade = request.args.get('class_grade')
-        if class_grade:
-            query = query.filter(Question.class_grade == class_grade)
+        raw_cg = request.args.get('class_grade')
+        if raw_cg:
+            cg_str = str(raw_cg).strip()
+            if cg_str.isdigit():
+                cg_str = f"Class {cg_str}"
+            query = query.filter(Question.class_grade.ilike(cg_str))
             
-        topic = request.args.get('topic')
+        topic = request.args.get('topic') or request.args.get('portion')
         if topic:
-            query = query.filter(Question.topic == topic)
+            import unicodedata
+            nfc_top = unicodedata.normalize('NFC', topic.strip())
+            nfd_top = unicodedata.normalize('NFD', topic.strip())
+            query = query.filter(Question.topic.in_([nfc_top, nfd_top]))
+
+        marks_param = request.args.get('marks')
+        if marks_param:
+            try:
+                query = query.filter(Question.marks == float(marks_param))
+            except (ValueError, TypeError):
+                pass
             
         bloom = request.args.get('bloom_level')
         if bloom:
@@ -1471,6 +1485,7 @@ def classify_question():
 # ==============================================================================
 
 @app.route('/api/generate-paper', methods=['POST'])
+@app.route('/api/papers/generate', methods=['POST'])
 @teacher_required
 def generate_paper():
     """
@@ -1488,23 +1503,42 @@ def generate_paper():
             return jsonify({'error': 'Request body is required'}), 400
         
         title = (data.get('title') or 'Terminal Examination').strip()
-        class_grade = data.get('class_grade')
-        subject = data.get('subject')
-        chapters = data.get('chapters') or []
-        topic = data.get('topic')
-        duration_minutes = int(data.get('duration_minutes') or 90)
-        num_questions = int(data.get('num_questions') or 10)
-        total_marks = float(data.get('total_marks') or (num_questions * 2))
-        
+        raw_class = data.get('class_grade')
+        if raw_class:
+            class_str = str(raw_class).strip()
+            if class_str.isdigit():
+                class_grade = f"Class {class_str}"
+            elif class_str.lower().startswith('class'):
+                parts = class_str.split()
+                if len(parts) == 2 and parts[1].isdigit():
+                    class_grade = f"Class {parts[1]}"
+                else:
+                    class_grade = class_str
+            else:
+                class_grade = class_str
+        else:
+            class_grade = None
+
         # Mandatory Class Validation: Classes 6 to 12 only!
         if not class_grade or class_grade not in get_supported_classes():
             return jsonify({
                 'success': False,
-                'error': f"Class selection is mandatory and must be one of Classes 6 to 12. Received: '{class_grade}'."
+                'error': f"Class selection is mandatory and must be one of Classes 6 to 12. Received: '{raw_class}'."
             }), 400
-        
+
         # Mandatory Subject Validation
+        raw_subject = data.get('subject')
         valid_subjects = get_supported_subjects(class_grade)
+        subject = None
+        if raw_subject:
+            s_str = str(raw_subject).strip()
+            for vs in valid_subjects:
+                if vs.lower() == s_str.lower():
+                    subject = vs
+                    break
+            if not subject:
+                subject = s_str
+
         if not subject:
             return jsonify({
                 'success': False,
@@ -1516,7 +1550,35 @@ def generate_paper():
         is_auth, err_resp, status_code = validate_teacher_subject_access(g.current_user, subject)
         if not is_auth:
             return jsonify(err_resp), status_code
-        
+
+        # Unicode normalization (NFC & NFD) for portions/chapters
+        import unicodedata
+        raw_chapters = data.get('chapters') or data.get('portions') or data.get('chapter') or []
+        if isinstance(raw_chapters, str):
+            raw_chapters = [c.strip() for c in raw_chapters.split(',') if c.strip()]
+
+        chapters = []
+        nfc_nfd_chaps = set()
+        for c in raw_chapters:
+            if c:
+                norm_c = unicodedata.normalize('NFC', str(c).strip())
+                if norm_c and norm_c not in chapters:
+                    chapters.append(norm_c)
+                    nfc_nfd_chaps.add(norm_c)
+                    nfc_nfd_chaps.add(unicodedata.normalize('NFD', norm_c))
+
+        raw_topic = data.get('topic') or data.get('portion')
+        topic = unicodedata.normalize('NFC', str(raw_topic).strip()) if raw_topic else None
+        if topic and topic.lower() not in ['complete syllabus', 'all chapters', 'all']:
+            if topic not in chapters:
+                chapters.append(topic)
+            nfc_nfd_chaps.add(topic)
+            nfc_nfd_chaps.add(unicodedata.normalize('NFD', topic))
+
+        duration_minutes = int(data.get('duration_minutes') or 90)
+        num_questions = int(data.get('num_questions') or 10)
+        total_marks = float(data.get('total_marks') or (num_questions * 2))
+
         # Compute true syllabus portions display (never truncate silently)
         all_subject_chapters = get_supported_chapters(class_grade, subject)
         if chapters and isinstance(chapters, list) and len(chapters) > 0:
@@ -1533,16 +1595,14 @@ def generate_paper():
         query = db.query(Question).filter(
             (Question.board == 'Tamil Nadu State Board') | (Question.board.is_(None))
         ).filter(
-            Question.class_grade == class_grade
+            Question.class_grade.ilike(class_grade)
         ).filter(
-            Question.subject == subject
+            Question.subject.ilike(subject)
         )
-        
+
         # If specific chapters/topics are chosen
-        if chapters and isinstance(chapters, list) and len(chapters) > 0:
-            query = query.filter(Question.topic.in_(chapters))
-        elif topic:
-            query = query.filter(Question.topic == topic)
+        if nfc_nfd_chaps:
+            query = query.filter(Question.topic.in_(list(nfc_nfd_chaps)))
             
         eligible_questions = [q.to_dict() for q in query.all()]
         
@@ -1673,23 +1733,43 @@ def preview_paper_blueprint():
             return jsonify({'error': 'Request body is required'}), 400
 
         title = (data.get('title') or 'Terminal Examination').strip()
-        class_grade = data.get('class_grade')
-        subject = data.get('subject')
-        chapters = data.get('chapters') or []
-        topic = data.get('topic')
-        duration_minutes = int(data.get('duration_minutes') or 90)
-        num_questions = int(data.get('num_questions') or 10)
-        total_marks = float(data.get('total_marks') or (num_questions * 2))
+        raw_class = data.get('class_grade')
+        if raw_class:
+            class_str = str(raw_class).strip()
+            if class_str.isdigit():
+                class_grade = f"Class {class_str}"
+            elif class_str.lower().startswith('class'):
+                parts = class_str.split()
+                if len(parts) == 2 and parts[1].isdigit():
+                    class_grade = f"Class {parts[1]}"
+                else:
+                    class_grade = class_str
+            else:
+                class_grade = class_str
+        else:
+            class_grade = None
 
         # Mandatory Class Validation: Classes 6 to 12 only!
         if not class_grade or class_grade not in get_supported_classes():
             return jsonify({
                 'success': False,
                 'is_valid': False,
-                'error': f"Class selection is mandatory and must be one of Classes 6 to 12. Received: '{class_grade}'."
+                'error': f"Class selection is mandatory and must be one of Classes 6 to 12. Received: '{raw_class}'."
             }), 400
 
         # Mandatory Subject Validation & Teacher Permission Check
+        raw_subject = data.get('subject')
+        valid_subjects = get_supported_subjects(class_grade)
+        subject = None
+        if raw_subject:
+            s_str = str(raw_subject).strip()
+            for vs in valid_subjects:
+                if vs.lower() == s_str.lower():
+                    subject = vs
+                    break
+            if not subject:
+                subject = s_str
+
         if not subject:
             return jsonify({
                 'success': False,
@@ -1700,6 +1780,34 @@ def preview_paper_blueprint():
         is_auth, err_resp, status_code = validate_teacher_subject_access(g.current_user, subject)
         if not is_auth:
             return jsonify(err_resp), status_code
+
+        # Unicode normalization (NFC & NFD) for portions/chapters
+        import unicodedata
+        raw_chapters = data.get('chapters') or data.get('portions') or data.get('chapter') or []
+        if isinstance(raw_chapters, str):
+            raw_chapters = [c.strip() for c in raw_chapters.split(',') if c.strip()]
+
+        chapters = []
+        nfc_nfd_chaps = set()
+        for c in raw_chapters:
+            if c:
+                norm_c = unicodedata.normalize('NFC', str(c).strip())
+                if norm_c and norm_c not in chapters:
+                    chapters.append(norm_c)
+                    nfc_nfd_chaps.add(norm_c)
+                    nfc_nfd_chaps.add(unicodedata.normalize('NFD', norm_c))
+
+        raw_topic = data.get('topic') or data.get('portion')
+        topic = unicodedata.normalize('NFC', str(raw_topic).strip()) if raw_topic else None
+        if topic and topic.lower() not in ['complete syllabus', 'all chapters', 'all']:
+            if topic not in chapters:
+                chapters.append(topic)
+            nfc_nfd_chaps.add(topic)
+            nfc_nfd_chaps.add(unicodedata.normalize('NFD', topic))
+
+        duration_minutes = int(data.get('duration_minutes') or 90)
+        num_questions = int(data.get('num_questions') or 10)
+        total_marks = float(data.get('total_marks') or (num_questions * 2))
 
         # Compute true syllabus portions display
         all_subject_chapters = get_supported_chapters(class_grade, subject)
@@ -1717,15 +1825,13 @@ def preview_paper_blueprint():
         query = db.query(Question).filter(
             (Question.board == 'Tamil Nadu State Board') | (Question.board.is_(None))
         ).filter(
-            Question.class_grade == class_grade
+            Question.class_grade.ilike(class_grade)
         ).filter(
-            Question.subject == subject
+            Question.subject.ilike(subject)
         )
 
-        if chapters and isinstance(chapters, list) and len(chapters) > 0:
-            query = query.filter(Question.topic.in_(chapters))
-        elif topic:
-            query = query.filter(Question.topic == topic)
+        if nfc_nfd_chaps:
+            query = query.filter(Question.topic.in_(list(nfc_nfd_chaps)))
 
         eligible_questions = [q.to_dict() for q in query.all()]
 

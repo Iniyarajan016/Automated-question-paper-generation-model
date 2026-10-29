@@ -256,7 +256,7 @@ class FullSystemVerificationTests(unittest.TestCase):
         payload = {
             'title': 'Validated Mark Distribution Exam',
             'class_grade': 'Class 10',
-            'subject': 'Mathematics',
+            'subject': 'Science',
             'num_questions': 6,
             'total_marks': 20,
             'difficulty_distribution': {'Easy': 50, 'Medium': 30, 'Hard': 20}

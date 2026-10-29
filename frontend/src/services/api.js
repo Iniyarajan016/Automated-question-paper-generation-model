@@ -316,6 +316,15 @@ export const api = {
   },
 
   // Question Paper Generation
+  async previewPaper(payload) {
+    const res = await fetch(`${API_BASE}/generate-paper/preview`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(payload)
+    });
+    return handleResponse(res);
+  },
+
   async generatePaper(payload) {
     const res = await fetch(`${API_BASE}/generate-paper`, {
       method: 'POST',

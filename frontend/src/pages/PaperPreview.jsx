@@ -49,6 +49,19 @@ export default function PaperPreview() {
   const questions = paperData.questions || [];
   const sections = paperData.sections || [];
 
+  const formatMarks = (m) => {
+    if (m === undefined || m === null) return '0';
+    const num = Number(m);
+    return Number.isInteger(num) ? num.toString() : num.toFixed(1);
+  };
+
+  const durMinutes = Number(paperData.duration_minutes || 90);
+  const durationDisplay = durMinutes >= 60
+    ? `${Math.floor(durMinutes / 60)}h ${durMinutes % 60}m`
+    : `${durMinutes} Mins`;
+
+  const portionsDisplay = paperData.portions || paperData.topic || null;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Top action bar */}
@@ -85,33 +98,52 @@ export default function PaperPreview() {
       </div>
 
       {/* Formal Paper Sheet (A4 print preview styling) */}
-      <div className="bg-white border border-slate-300/80 rounded-2xl shadow-lg shadow-slate-200/50 p-8 sm:p-14 space-y-8 print:border-0 print:shadow-none print:p-0">
+      <div className="bg-white border border-slate-300/80 rounded-2xl shadow-lg shadow-slate-200/50 p-8 sm:p-14 space-y-6 print:border-0 print:shadow-none print:p-0">
         {/* Paper Header: Authentic Academic Format */}
-        <div className="text-center border-b-2 border-slate-900 pb-6 space-y-2">
+        <div className="text-center border-b-2 border-slate-900 pb-5 space-y-2">
           <div className="text-[11px] font-bold tracking-[0.2em] text-slate-600 uppercase font-sans">
             TAMIL NADU STATE BOARD — SAMACHEER KALVI
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-950 uppercase tracking-tight font-serif">
             {paperData.title}
           </h1>
-          <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-1 text-xs text-slate-700 font-medium font-sans pt-2">
+          <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-1.5 text-xs text-slate-700 font-medium font-sans pt-2">
             <span>Class: <strong className="text-slate-900">{paperData.class_grade || 'Class 10'}</strong></span>
             <span>Subject: <strong className="text-slate-900">{paperData.subject}</strong></span>
-            <span>Maximum Marks: <strong className="text-slate-900 font-mono">{paperData.total_marks}</strong></span>
-            <span>Duration: <strong className="text-slate-900">{paperData.duration_minutes || 90} Mins</strong></span>
+            <span className="whitespace-nowrap">Time Allowed: <strong className="text-slate-900">{durationDisplay}</strong></span>
+            <span>Maximum Marks: <strong className="text-slate-900 font-mono">{formatMarks(paperData.total_marks)}</strong></span>
           </div>
         </div>
 
-        {/* Candidate & Instructions Section */}
-        <div className="bg-slate-50/80 p-5 rounded-xl border border-slate-200 text-xs font-sans text-slate-700 space-y-2">
-          <div className="flex items-center justify-between font-semibold text-slate-900 border-b border-slate-200 pb-1.5">
+        {/* Candidate Register Number & Name Section */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 bg-slate-50/90 rounded-xl border border-slate-200 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-slate-800 shrink-0">Candidate Name:</span>
+            <span className="flex-1 border-b border-slate-400 border-dotted h-4" />
+          </div>
+          <div className="flex items-center gap-2 justify-start sm:justify-end">
+            <span className="font-bold text-slate-800 shrink-0">Register Number:</span>
+            <div className="flex gap-1">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="w-5 h-6 border border-slate-400 bg-white rounded-xs shadow-2xs" />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Instructions Section */}
+        <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-200 text-xs font-sans text-slate-700 space-y-1.5">
+          <div className="flex items-center justify-between font-semibold text-slate-900 border-b border-slate-200/80 pb-1">
             <span>General Instructions:</span>
-            <span className="text-[11px] text-slate-500 font-normal">Candidate Copy</span>
+            <span className="text-[10px] text-slate-500 font-normal">Candidate Copy</span>
           </div>
           <ol className="list-decimal list-inside space-y-1 text-slate-600 leading-relaxed text-[11px]">
             <li>All questions are compulsory. Marks are indicated against each question.</li>
+            <li>Candidate must write the Register Number clearly in the boxes above and on the answer booklet.</li>
             <li>Verify that this question paper contains exactly <strong>{questions.length}</strong> questions before attempting.</li>
-            <li>Write neatly and legibly. All rough work must be carried out in the designated space.</li>
+            {portionsDisplay && (
+              <li>Portions covered: <strong className="text-slate-800">{portionsDisplay}</strong></li>
+            )}
           </ol>
         </div>
 
@@ -141,7 +173,7 @@ export default function PaperPreview() {
                         </div>
                       </div>
                       <div className="text-xs font-bold font-mono text-slate-700 shrink-0">
-                        [{q.marks || 2}]
+                        [{formatMarks(q.marks || 2)}]
                       </div>
                     </div>
                   ))}

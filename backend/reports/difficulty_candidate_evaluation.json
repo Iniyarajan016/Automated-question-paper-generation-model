@@ -36,9 +36,9 @@
   },
   "tn_benchmark_evaluation": {
     "benchmark_name": "Tamil Nadu State Board Held-Out Test Benchmark",
-    "test_samples": 251,
-    "accuracy": 0.3267,
-    "macro_f1": 0.3172
+    "test_samples": 259,
+    "accuracy": 0.3977,
+    "macro_f1": 0.385
   },
   "per_class": {
     "Easy": {

@@ -320,9 +320,22 @@ def get_curriculum_classes():
 
 @app.route('/api/curriculum/subjects', methods=['GET'])
 def get_curriculum_subjects():
-    """Get verified subjects for a specific Tamil Nadu State Board class."""
+    """Get verified subjects for a specific Tamil Nadu State Board class.
+    Teachers are restricted to their assigned subject specialization.
+    """
     class_grade = request.args.get('class_grade') or 'Class 10'
     subjects = get_supported_subjects(class_grade)
+    # Enforce teacher subject restriction
+    from flask import g
+    current_user = getattr(g, 'current_user', None)
+    if current_user and current_user.role == 'teacher' and current_user.subject_specialization:
+        # Only include the teacher's specialization if it exists for the class
+        spec = current_user.subject_specialization.strip()
+        if spec in subjects:
+            subjects = [spec]
+        else:
+            # Teacher's specialization not offered for this class – return empty list
+            subjects = []
     return jsonify({
         'board': 'Tamil Nadu State Board',
         'class_grade': class_grade,
@@ -332,9 +345,23 @@ def get_curriculum_subjects():
 
 @app.route('/api/curriculum/chapters', methods=['GET'])
 def get_curriculum_chapters():
-    """Get verified textbook chapters for a specific class and subject."""
+    """Get verified textbook chapters for a specific class and subject.
+    Teachers may only request chapters for their assigned subject specialization.
+    """
     class_grade = request.args.get('class_grade') or 'Class 10'
     subject = request.args.get('subject') or 'Mathematics'
+    # Enforce teacher subject restriction
+    from flask import g
+    current_user = getattr(g, 'current_user', None)
+    if current_user and current_user.role == 'teacher' and current_user.subject_specialization:
+        spec = current_user.subject_specialization.strip()
+        if subject != spec:
+            # Teacher attempting to access a non‑assigned subject – forbid
+            return jsonify({
+                'error': 'Access forbidden. Teacher may only view chapters for their assigned subject.',
+                'allowed_subject': spec
+            }), 403
+        # Ensure the subject is valid for the class; get_supported_chapters will handle empty result
     chapters = get_supported_chapters(class_grade, subject)
     return jsonify({
         'board': 'Tamil Nadu State Board',
@@ -1073,6 +1100,18 @@ def generate_paper():
                 'error': f"Subject selection is mandatory for {class_grade}."
             }), 400
         
+        # Compute true syllabus portions display (never truncate silently)
+        all_subject_chapters = get_supported_chapters(class_grade, subject)
+        if chapters and isinstance(chapters, list) and len(chapters) > 0:
+            if len(chapters) == len(all_subject_chapters) and len(all_subject_chapters) > 0:
+                topic_display = "Complete Syllabus (All Chapters)"
+            else:
+                topic_display = ", ".join(chapters)
+        elif topic:
+            topic_display = topic
+        else:
+            topic_display = "Complete Syllabus"
+
         # Query approved Tamil Nadu State Board questions
         query = db.query(Question).filter(
             (Question.board == 'Tamil Nadu State Board') | (Question.board.is_(None))
@@ -1119,6 +1158,7 @@ def generate_paper():
             class_grade=class_grade,
             difficulty_distribution=diff_dist,
             bloom_distribution=bloom_dist,
+            duration_minutes=duration_minutes,
             seed=seed
         )
         
@@ -1128,13 +1168,13 @@ def generate_paper():
         selected_questions = result['selected_questions']
         sections = result.get('sections', [])
         
-        # Generate official printable PDF
+        # Generate official printable PDF with accurate portions and integer marks
         paper_meta = {
             'title': title,
             'board': 'Tamil Nadu State Board',
             'class_grade': class_grade,
             'subject': subject,
-            'topic': ", ".join(chapters[:3]) if chapters else topic,
+            'topic': topic_display,
             'duration_minutes': duration_minutes,
             'total_marks': result['total_marks'],
         }
@@ -1151,7 +1191,7 @@ def generate_paper():
             board='Tamil Nadu State Board',
             class_grade=class_grade,
             subject=subject,
-            topic=paper_meta['topic'],
+            topic=topic_display,
             total_marks=result['total_marks'],
             duration_minutes=duration_minutes,
             num_questions=len(selected_questions),
@@ -1171,10 +1211,12 @@ def generate_paper():
         
         return jsonify({
             'success': True,
+            'is_valid': result.get('is_valid', True),
             'paper_id': paper.id,
             'title': title,
             'class_grade': class_grade,
             'subject': subject,
+            'portions': topic_display,
             'duration_minutes': duration_minutes,
             'questions': selected_questions,
             'sections': sections,
@@ -1183,11 +1225,142 @@ def generate_paper():
             'pdf_filename': filename,
             'bloom_distribution': result['bloom_distribution'],
             'difficulty_distribution': result['difficulty_distribution'],
+            'validation_checks': result.get('validation_checks', {}),
             'warnings': result['warnings'],
         }), 201
 
     except Exception as e:
         db.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/generate-paper/preview', methods=['POST'])
+@app.route('/api/generate-paper/validate', methods=['POST'])
+@teacher_required
+def preview_paper_blueprint():
+    """
+    Teacher Blueprint Preview & Pre-Export Validation:
+    Allows teachers to inspect syllabus coverage, marks distribution, section totals,
+    continuous numbering, and quality warnings BEFORE committing or exporting the PDF.
+    """
+    db = get_db()
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        title = (data.get('title') or 'Terminal Examination').strip()
+        class_grade = data.get('class_grade')
+        subject = data.get('subject')
+        chapters = data.get('chapters') or []
+        topic = data.get('topic')
+        duration_minutes = int(data.get('duration_minutes') or 90)
+        num_questions = int(data.get('num_questions') or 10)
+        total_marks = float(data.get('total_marks') or (num_questions * 2))
+
+        # Mandatory Class Validation: Classes 6 to 12 only!
+        if not class_grade or class_grade not in get_supported_classes():
+            return jsonify({
+                'success': False,
+                'is_valid': False,
+                'error': f"Class selection is mandatory and must be one of Classes 6 to 12. Received: '{class_grade}'."
+            }), 400
+
+        # Mandatory Subject Validation
+        if not subject:
+            return jsonify({
+                'success': False,
+                'is_valid': False,
+                'error': f"Subject selection is mandatory for {class_grade}."
+            }), 400
+
+        # Compute true syllabus portions display
+        all_subject_chapters = get_supported_chapters(class_grade, subject)
+        if chapters and isinstance(chapters, list) and len(chapters) > 0:
+            if len(chapters) == len(all_subject_chapters) and len(all_subject_chapters) > 0:
+                topic_display = "Complete Syllabus (All Chapters)"
+            else:
+                topic_display = ", ".join(chapters)
+        elif topic:
+            topic_display = topic
+        else:
+            topic_display = "Complete Syllabus"
+
+        # Query approved Tamil Nadu State Board questions
+        query = db.query(Question).filter(
+            (Question.board == 'Tamil Nadu State Board') | (Question.board.is_(None))
+        ).filter(
+            Question.class_grade == class_grade
+        ).filter(
+            Question.subject == subject
+        )
+
+        if chapters and isinstance(chapters, list) and len(chapters) > 0:
+            query = query.filter(Question.topic.in_(chapters))
+        elif topic:
+            query = query.filter(Question.topic == topic)
+
+        eligible_questions = [q.to_dict() for q in query.all()]
+
+        if not eligible_questions:
+            return jsonify({
+                'success': False,
+                'is_valid': False,
+                'error': f"No questions found in question bank for Tamil Nadu State Board {class_grade} {subject} matching the selected syllabus portions: '{topic_display}'.",
+                'eligible_count': 0,
+                'suggestions': [
+                    "Select additional chapters from the syllabus",
+                    "Verify questions have been ingested for this subject in the Question Bank"
+                ]
+            }), 400
+
+        diff_dist = data.get('difficulty_distribution')
+        bloom_dist = data.get('bloom_distribution')
+        seed = data.get('seed') or random.randint(1000, 999999)
+
+        result = select_questions(
+            available_questions=eligible_questions,
+            num_questions=num_questions,
+            total_marks=total_marks,
+            subject=subject,
+            topic=topic,
+            topics=chapters,
+            board='Tamil Nadu State Board',
+            class_grade=class_grade,
+            difficulty_distribution=diff_dist,
+            bloom_distribution=bloom_dist,
+            duration_minutes=duration_minutes,
+            seed=seed
+        )
+
+        if not result['success']:
+            return jsonify(result), 400
+
+        dur_str = f"{duration_minutes // 60}h {duration_minutes % 60}m" if duration_minutes >= 60 else f"{duration_minutes} Mins"
+
+        return jsonify({
+            'success': True,
+            'is_valid': result.get('is_valid', True),
+            'title': title,
+            'class_grade': class_grade,
+            'subject': subject,
+            'portions': topic_display,
+            'duration_minutes': duration_minutes,
+            'duration_display': dur_str,
+            'num_questions': result['count'],
+            'total_marks': result['total_marks'],
+            'sections': result.get('sections', []),
+            'questions': result.get('selected_questions', []),
+            'bloom_distribution': result.get('bloom_distribution', {}),
+            'difficulty_distribution': result.get('difficulty_distribution', {}),
+            'validation_checks': result.get('validation_checks', {}),
+            'warnings': result.get('warnings', []),
+            'seed': seed
+        }), 200
+
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()

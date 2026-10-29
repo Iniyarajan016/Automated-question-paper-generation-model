@@ -24,24 +24,24 @@
     "strategy": "most_frequent"
   },
   "active_model_comparison": {
-    "active_version": "rf-bloom-v20261014_214514",
-    "active_accuracy": 0.9464,
-    "active_macro_f1": 0.7936,
-    "active_macro_precision": 0.7976,
-    "active_macro_recall": 0.7951,
+    "active_version": "rf-bloom-candidate-v20261014_231908",
+    "active_accuracy": 0.48,
+    "active_macro_f1": 0.4156,
+    "active_macro_precision": 0.4413,
+    "active_macro_recall": 0.48,
     "candidate_accuracy": 0.1667,
     "candidate_macro_f1": 0.0667,
-    "delta_accuracy": -0.7797,
-    "delta_macro_f1": -0.7269,
-    "delta_macro_precision": -0.7559,
-    "delta_macro_recall": -0.6284,
+    "delta_accuracy": -0.3133,
+    "delta_macro_f1": -0.3489,
+    "delta_macro_precision": -0.3996,
+    "delta_macro_recall": -0.3133,
     "performance_improved": false
   },
   "tn_benchmark_evaluation": {
     "benchmark_name": "Tamil Nadu State Board Held-Out Test Benchmark",
-    "test_samples": 251,
-    "accuracy": 0.2709,
-    "macro_f1": 0.1741
+    "test_samples": 259,
+    "accuracy": 0.3243,
+    "macro_f1": 0.1897
   },
   "per_class": {
     "Analyze": {

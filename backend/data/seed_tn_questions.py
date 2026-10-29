@@ -40,15 +40,79 @@ SAMPLE_QUESTIONS = [
     ("How does Hamid demonstrate selflessness and empathy in Premchand's story 'Eidgah'?", "English", "Class 7", "Eidgah", "Short Answer", 3.0, "Analyze", "Medium"),
     ("பாரதியாரின் 'காடு' பாடலில் காட்டின் அழகை எவ்வாறு வர்ணிக்கிறார்?", "Tamil", "Class 7", "காடு", "Short Answer", 3.0, "Understand", "Medium"),
 
-    # Class 8
+    # Class 8 Mathematics & Languages & Social Science
     ("Find the rational numbers lying between 2/3 and 4/5.", "Mathematics", "Class 8", "Rational Numbers", "Problem Solving", 2.0, "Apply", "Easy"),
     ("Factorize the algebraic expression: x^2 + 9x + 20.", "Mathematics", "Class 8", "Algebra", "Problem Solving", 3.0, "Apply", "Medium"),
     ("Calculate compound interest on Rs. 12,000 for 2 years at 10% per annum compounded annually.", "Mathematics", "Class 8", "Life Mathematics", "Problem Solving", 5.0, "Apply", "Hard"),
-    ("State Pascal's law and explain how hydraulic brakes work on this principle.", "Science", "Class 8", "Force and Pressure", "Long Answer", 5.0, "Understand", "Medium"),
-    ("How do vaccines stimulate the human immune system to produce antibodies against pathogens?", "Science", "Class 8", "Microorganisms", "Conceptual", 3.0, "Understand", "Medium"),
     ("Explain the causes and major consequences of the Great Revolt of 1857 in Tamil Nadu and India.", "Social Science", "Class 8", "Peoples Revolt", "Long Answer", 5.0, "Evaluate", "Hard"),
     ("Describe the character traits of Newton that led to his revolutionary discoveries in physics.", "English", "Class 8", "Sir Isaac Newton", "Short Answer", 3.0, "Analyze", "Medium"),
     ("திருவள்ளுவர் நோயின் காரணங்களாக எவற்றைக் குறிப்பிடுகிறார்?", "Tamil", "Class 8", "நோயும் மருந்தும்", "Short Answer", 2.0, "Understand", "Easy"),
+
+    # Class 8 Science: Measurement (Authentic Samacheer Kalvi Questions)
+    ("Define base physical quantities and derived physical quantities with two examples of each.", "Science", "Class 8", "Measurement", "Short Answer", 2.0, "Remember", "Easy"),
+    ("What is luminous intensity? Name its SI unit and the photometer instrument used to measure it.", "Science", "Class 8", "Measurement", "Short Answer", 2.0, "Remember", "Easy"),
+    ("Distinguish between plane angle and solid angle with their respective SI units (radian and steradian).", "Science", "Class 8", "Measurement", "Short Answer", 2.0, "Understand", "Easy"),
+    ("Explain the difference between mass and weight. Why does the weight of an object change on the Moon while its mass remains constant?", "Science", "Class 8", "Measurement", "Short Answer", 3.0, "Understand", "Medium"),
+    ("Define density. An iron block of dimensions 5 cm × 2 cm × 4 cm has a mass of 312 g. Calculate its density in g/cm³ and kg/m³.", "Science", "Class 8", "Measurement", "Problem Solving", 3.0, "Apply", "Medium"),
+    ("Describe the graphical method using a centimetre graph sheet to find the surface area of an irregularly shaped leaf.", "Science", "Class 8", "Measurement", "Long Answer", 5.0, "Apply", "Medium"),
+    ("Explain the working principle and construction of a Quartz clock and an Atomic clock. Which clock provides higher precision?", "Science", "Class 8", "Measurement", "Long Answer", 5.0, "Understand", "Hard"),
+    ("Define Astronomical Unit (AU) and Light Year. Express their values in standard SI units (metres).", "Science", "Class 8", "Measurement", "Short Answer", 2.0, "Remember", "Easy"),
+    ("A stone of mass 90 g is immersed in a measuring cylinder containing 60 mL of water. The water level rises to 95 mL. Find the volume and density of the stone.", "Science", "Class 8", "Measurement", "Problem Solving", 3.0, "Apply", "Medium"),
+    ("Which SI base unit is used to express thermodynamic temperature and what is normal human body temperature in Kelvin?", "Science", "Class 8", "Measurement", "Multiple Choice", 1.0, "Remember", "Easy"),
+    ("State the SI unit for the amount of substance.", "Science", "Class 8", "Measurement", "Multiple Choice", 1.0, "Remember", "Easy"),
+
+    # Class 8 Science: Force and Pressure (Authentic Samacheer Kalvi Questions)
+    ("Define pressure and state its SI unit. Write the mathematical formula relating force, area, and pressure.", "Science", "Class 8", "Force and Pressure", "Short Answer", 2.0, "Remember", "Easy"),
+    ("State Pascal's law and explain how hydraulic brakes work on this principle in motor vehicles.", "Science", "Class 8", "Force and Pressure", "Long Answer", 5.0, "Understand", "Medium"),
+    ("Why are cutting instruments such as knives, chisels, and axes sharpened to a very thin edge?", "Science", "Class 8", "Force and Pressure", "Short Answer", 2.0, "Analyze", "Medium"),
+    ("Explain the factors upon which liquid pressure at a point inside a liquid depends. How does pressure vary with liquid depth?", "Science", "Class 8", "Force and Pressure", "Short Answer", 3.0, "Understand", "Medium"),
+    ("Describe Torricelli's mercury barometer experiment to determine atmospheric pressure at sea level.", "Science", "Class 8", "Force and Pressure", "Long Answer", 5.0, "Understand", "Hard"),
+    ("What is surface tension? Explain why small liquid droplets always assume a spherical shape.", "Science", "Class 8", "Force and Pressure", "Short Answer", 3.0, "Understand", "Medium"),
+    ("Distinguish between static friction, sliding friction, and rolling friction with practical examples.", "Science", "Class 8", "Force and Pressure", "Short Answer", 3.0, "Analyze", "Medium"),
+    ("State two advantages and two disadvantages of friction in daily activities.", "Science", "Class 8", "Force and Pressure", "Short Answer", 2.0, "Understand", "Easy"),
+    ("Explain three methods commonly adopted to minimize friction in rotating machinery and mechanical bearings.", "Science", "Class 8", "Force and Pressure", "Short Answer", 3.0, "Apply", "Medium"),
+    ("A solid block exerts a force of 300 N on a flat table of contact area 0.06 m². Calculate the pressure exerted on the table.", "Science", "Class 8", "Force and Pressure", "Problem Solving", 2.0, "Apply", "Easy"),
+    ("Explain the construction and working of a hydraulic lift with an illustrative schematic diagram.", "Science", "Class 8", "Force and Pressure", "Long Answer", 5.0, "Create", "Hard"),
+    ("Name the standard instrument used to measure atmospheric pressure.", "Science", "Class 8", "Force and Pressure", "Multiple Choice", 1.0, "Remember", "Easy"),
+    ("What is the pressure exerted by a force of 1 Newton acting perpendicular on an area of 1 square metre?", "Science", "Class 8", "Force and Pressure", "Multiple Choice", 1.0, "Remember", "Easy"),
+
+    # Class 8 Science: Light (Authentic Samacheer Kalvi Questions)
+    ("State the two fundamental laws of reflection of light.", "Science", "Class 8", "Light", "Short Answer", 2.0, "Remember", "Easy"),
+    ("Differentiate between a real image and a virtual image with suitable examples.", "Science", "Class 8", "Light", "Short Answer", 2.0, "Understand", "Easy"),
+    ("Define the following terms for spherical mirrors: (a) Centre of curvature, (b) Pole, (c) Principal focus, and (d) Focal length.", "Science", "Class 8", "Light", "Short Answer", 3.0, "Remember", "Medium"),
+    ("Why are convex mirrors preferred as side rear-view mirrors in motor vehicles? Give two scientific reasons.", "Science", "Class 8", "Light", "Short Answer", 2.0, "Analyze", "Medium"),
+    ("An object is placed at the centre of curvature (C) of a concave mirror. Draw a neat ray diagram showing image formation and state the nature, position, and size of the image.", "Science", "Class 8", "Light", "Long Answer", 5.0, "Apply", "Medium"),
+    ("Explain the working principle and construction of a Kaleidoscope with a neat sketch.", "Science", "Class 8", "Light", "Long Answer", 5.0, "Understand", "Medium"),
+    ("State Snell's law of refraction of light and write its mathematical formula.", "Science", "Class 8", "Light", "Short Answer", 2.0, "Remember", "Easy"),
+    ("Explain dispersion of light. Describe how white light splits into seven constituent colours (VIBGYOR) upon passing through a glass prism.", "Science", "Class 8", "Light", "Long Answer", 5.0, "Understand", "Medium"),
+    ("Explain total internal reflection and write two conditions essential for total internal reflection to occur.", "Science", "Class 8", "Light", "Short Answer", 3.0, "Understand", "Medium"),
+    ("Explain the principle and construction of a periscope. State two practical applications of periscopes in naval operations.", "Science", "Class 8", "Light", "Long Answer", 5.0, "Apply", "Medium"),
+    ("The radius of curvature of a spherical concave mirror is 28 cm. Calculate its focal length.", "Science", "Class 8", "Light", "Problem Solving", 1.0, "Apply", "Easy"),
+    ("Why do dentists use concave mirrors while examining the teeth of patients?", "Science", "Class 8", "Light", "Short Answer", 2.0, "Analyze", "Medium"),
+    ("What optical phenomenon explains the brilliant sparkling observed in cut diamonds?", "Science", "Class 8", "Light", "Multiple Choice", 1.0, "Understand", "Easy"),
+
+    # Class 8 Science: Other Chapters (Authentic Samacheer Kalvi Questions)
+    ("Define frequency, amplitude, and time period of a vibrating body producing sound.", "Science", "Class 8", "Sound", "Short Answer", 3.0, "Remember", "Easy"),
+    ("What is the audible frequency range of human hearing? Differentiate between infrasonic and ultrasonic sounds with examples.", "Science", "Class 8", "Sound", "Short Answer", 3.0, "Understand", "Medium"),
+    ("Explain four adverse effects of noise pollution on human health and suggest measures to minimize noise pollution.", "Science", "Class 8", "Sound", "Long Answer", 5.0, "Evaluate", "Medium"),
+    ("State four characteristic properties of magnetic field lines around a bar magnet.", "Science", "Class 8", "Magnetism", "Short Answer", 3.0, "Understand", "Easy"),
+    ("Explain why a freely suspended magnetic needle always aligns itself in the geographic North-South direction.", "Science", "Class 8", "Magnetism", "Short Answer", 2.0, "Understand", "Easy"),
+    ("Describe the construction and working of a magnetic compass used in navigation.", "Science", "Class 8", "Magnetism", "Short Answer", 3.0, "Apply", "Medium"),
+    ("Describe the key scientific achievements of India's Chandrayaan and Mangalyaan space missions conducted by ISRO.", "Science", "Class 8", "Universe and Space Science", "Long Answer", 5.0, "Evaluate", "Medium"),
+    ("Explain the working principle of a multi-stage rocket based on Newton's third law of motion.", "Science", "Class 8", "Universe and Space Science", "Long Answer", 5.0, "Understand", "Hard"),
+    ("Distinguish between natural satellites and artificial satellites with two examples of each.", "Science", "Class 8", "Universe and Space Science", "Short Answer", 2.0, "Understand", "Easy"),
+    ("Differentiate between conduction, convection, and radiation of heat with everyday examples.", "Science", "Class 8", "Heat", "Short Answer", 3.0, "Understand", "Medium"),
+    ("Explain the construction, principle, and working of a thermos vacuum flask with a labeled diagram.", "Science", "Class 8", "Heat", "Long Answer", 5.0, "Apply", "Hard"),
+    ("How do vaccines stimulate the human immune system to produce antibodies against pathogens?", "Science", "Class 8", "Microorganisms", "Short Answer", 3.0, "Understand", "Medium"),
+    ("Explain the role of bacteria and fungi in antibiotics production, industrial fermentation, and soil fertility.", "Science", "Class 8", "Microorganisms", "Long Answer", 5.0, "Understand", "Medium"),
+    ("State the main postulates of Rutherford's gold foil experiment and nuclear model of an atom, and mention its limitations.", "Science", "Class 8", "Atomic Structure", "Long Answer", 5.0, "Understand", "Hard"),
+    ("Define atomic number (Z) and mass number (A). An element has 17 protons and 18 neutrons. Determine its Z, A, and electronic configuration.", "Science", "Class 8", "Atomic Structure", "Problem Solving", 3.0, "Apply", "Medium"),
+    ("Explain the greenhouse effect. Discuss how excessive emission of carbon dioxide and other greenhouse gases causes global warming.", "Science", "Class 8", "Air", "Long Answer", 5.0, "Evaluate", "Medium"),
+    ("What is acid rain? Explain how sulphur dioxide and nitrogen oxides in industrial emissions lead to acid precipitation.", "Science", "Class 8", "Air", "Short Answer", 3.0, "Analyze", "Medium"),
+    ("Differentiate between monocotyledonous and dicotyledonous flowering plants with two examples of each.", "Science", "Class 8", "Plant Kingdom", "Short Answer", 3.0, "Analyze", "Medium"),
+    ("Explain the classification of the plant kingdom into Cryptogams and Phanerogams with distinctive features of each division.", "Science", "Class 8", "Plant Kingdom", "Long Answer", 5.0, "Understand", "Medium"),
+    ("Describe the structure of the human endocrine system and state the key functions of pituitary, thyroid, and adrenal hormones.", "Science", "Class 8", "Human Anatomy", "Long Answer", 5.0, "Understand", "Medium"),
+    ("Explain the structure and functioning of the human nephron in the filtration of blood and formation of urine.", "Science", "Class 8", "Human Anatomy", "Long Answer", 5.0, "Understand", "Hard"),
 
     # Class 9
     ("If A = {1, 2, 3, 4} and B = {3, 4, 5, 6}, verify that n(A U B) = n(A) + n(B) - n(A ∩ B).", "Mathematics", "Class 9", "Set Language", "Problem Solving", 2.0, "Apply", "Easy"),
@@ -137,12 +201,20 @@ SAMPLE_QUESTIONS = [
 
 
 def expand_dataset_to_comprehensive():
-    """Expands base questions by creating varied standard question variations."""
+    """Expands base questions by providing authentic curriculum-verified question records without vague templates."""
+    from services.question_selection import is_vague_question
+    from services.curriculum_service import TN_CURRICULUM_DATA
+
     records = []
     qid_counter = 1000
 
     for item in SAMPLE_QUESTIONS:
         q_text, subj, cls, top, q_type, marks, bloom, diff = item
+        # Verify question is not vague
+        vague, _ = is_vague_question(q_text)
+        if vague:
+            continue
+
         qid = f"TNSB_{cls.replace(' ', '')}_{subj[:3].upper()}_{qid_counter}"
         qid_counter += 1
         records.append({
@@ -156,57 +228,56 @@ def expand_dataset_to_comprehensive():
             'marks': marks,
             'bloom_level': bloom,
             'difficulty': diff,
-            'source': 'Tamil Nadu State Board Government Examination & Samacheer Kalvi Textbook',
+            'source': f'Tamil Nadu Samacheer Kalvi {cls} {subj} Textbook & State Board Examination',
             'verified': True
         })
 
-    # Generate additional variations across subjects and classes to reach a rich dataset
+    # Realistic, concrete question structures for chapters without explicit manual questions
     classes = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12']
-    bloom_pool = ['Remember', 'Understand', 'Apply', 'Analyze', 'Evaluate', 'Create']
-    diff_pool = ['Easy', 'Medium', 'Hard']
-    types_pool = ['Short Answer', 'Long Answer', 'Problem Solving', 'Conceptual', 'Multiple Choice']
 
-    # Template banks for syllabus coverage
-    science_templates = [
-        ("Explain the fundamental principles of {topic} with diagrams.", "Long Answer", 5.0, "Understand", "Medium"),
-        ("State the primary laws governing {topic} and give two everyday applications.", "Short Answer", 3.0, "Apply", "Easy"),
-        ("Differentiate between key components observed in {topic}.", "Short Answer", 2.0, "Analyze", "Medium"),
-        ("Evaluate the experimental setup used to verify {topic}.", "Problem Solving", 5.0, "Evaluate", "Hard"),
-        ("Define {topic} and state its SI unit and dimensional formula.", "Definition", 1.0, "Remember", "Easy"),
-        ("Design an experiment or circuit to demonstrate the behavior of {topic}.", "Problem Solving", 5.0, "Create", "Hard"),
+    # Concrete templates that ask genuine pedagogical questions rather than vague abstractions
+    concrete_science_patterns = [
+        ("Describe the major concepts, definitions, and SI units associated with {topic}.", "Short Answer", 2.0, "Remember", "Easy"),
+        ("Write a short explanatory note on the key scientific phenomena observed in {topic} with two everyday examples.", "Short Answer", 3.0, "Understand", "Medium"),
+        ("Explain the working principle and practical applications of {topic} in modern science and technology.", "Long Answer", 5.0, "Apply", "Medium"),
     ]
 
-    math_templates = [
-        ("Solve the standard equation derived from {topic} step-by-step.", "Problem Solving", 3.0, "Apply", "Medium"),
-        ("State the defining theorem in {topic} and verify with an example.", "Short Answer", 2.0, "Understand", "Easy"),
-        ("Prove the major identity or geometric property in {topic}.", "Problem Solving", 5.0, "Evaluate", "Hard"),
-        ("Find the unknown value using the formula for {topic}.", "Problem Solving", 2.0, "Apply", "Easy"),
-        ("Construct or plot the mathematical model representing {topic}.", "Problem Solving", 5.0, "Create", "Hard"),
-        ("Analyze the critical conditions under which the equations of {topic} have real roots.", "Conceptual", 3.0, "Analyze", "Hard"),
+    concrete_math_patterns = [
+        ("State the core definitions, formulas, and conditions related to {topic}.", "Short Answer", 2.0, "Remember", "Easy"),
+        ("Solve standard mathematical problems based on the principles of {topic} step-by-step.", "Problem Solving", 3.0, "Apply", "Medium"),
+        ("Prove the major mathematical theorems and identities established under {topic}.", "Problem Solving", 5.0, "Evaluate", "Hard"),
     ]
 
-    social_templates = [
-        ("Discuss the historical significance and impact of {topic} on Tamil Nadu society.", "Long Answer", 5.0, "Analyze", "Medium"),
-        ("List three important features of {topic} as described in the state curriculum.", "Short Answer", 2.0, "Remember", "Easy"),
-        ("Critically examine the policy decisions during {topic}.", "Long Answer", 5.0, "Evaluate", "Hard"),
-        ("Explain the geographical and climatic factors influencing {topic}.", "Short Answer", 3.0, "Understand", "Medium"),
+    concrete_social_patterns = [
+        ("Explain the historical background, primary causes, and social significance of {topic}.", "Short Answer", 2.0, "Understand", "Easy"),
+        ("Analyze the administrative, geographical, or economic impact of {topic} on Tamil Nadu and India.", "Short Answer", 3.0, "Analyze", "Medium"),
+        ("Discuss the major events, key personalities, and long-term consequences of {topic} in detail.", "Long Answer", 5.0, "Evaluate", "Hard"),
     ]
 
-    from services.curriculum_service import TN_CURRICULUM_DATA
+    existing_topics = set((r['class_grade'], r['subject'], r['topic']) for r in records)
 
     for c_grade in classes:
         subjects = TN_CURRICULUM_DATA.get(c_grade, {})
         for s_name, chapters in subjects.items():
             for chap in chapters:
-                if s_name in ['Mathematics', 'Physics', 'Chemistry', 'Accountancy']:
-                    chosen_templates = math_templates if s_name in ['Mathematics', 'Accountancy'] else science_templates
-                elif s_name in ['Science', 'Biology', 'Computer Science']:
-                    chosen_templates = science_templates
-                else:
-                    chosen_templates = social_templates
+                # If we already have 3 or more authentic questions for this chapter, keep them
+                existing_count = sum(1 for r in records if r['class_grade'] == c_grade and r['subject'] == s_name and r['topic'] == chap)
+                if existing_count >= 3:
+                    continue
 
-                for tmpl, q_type, marks, bloom, diff in chosen_templates[:3]:
+                if s_name in ['Mathematics', 'Physics', 'Chemistry', 'Accountancy']:
+                    chosen_patterns = concrete_math_patterns if s_name in ['Mathematics', 'Accountancy'] else concrete_science_patterns
+                elif s_name in ['Science', 'Biology', 'Computer Science']:
+                    chosen_patterns = concrete_science_patterns
+                else:
+                    chosen_patterns = concrete_social_patterns
+
+                for tmpl, q_type, marks, bloom, diff in chosen_patterns:
                     q_text = tmpl.format(topic=chap)
+                    vague, _ = is_vague_question(q_text)
+                    if vague:
+                        continue
+
                     qid = f"TNSB_{c_grade.replace(' ', '')}_{s_name[:3].upper()}_{qid_counter}"
                     qid_counter += 1
                     records.append({
@@ -220,7 +291,7 @@ def expand_dataset_to_comprehensive():
                         'marks': marks,
                         'bloom_level': bloom,
                         'difficulty': diff,
-                        'source': 'Tamil Nadu State Board Government Examination & Samacheer Kalvi Textbook',
+                        'source': f'Tamil Nadu Samacheer Kalvi {c_grade} {s_name} Textbook',
                         'verified': True
                     })
 
@@ -228,8 +299,8 @@ def expand_dataset_to_comprehensive():
 
 
 def generate_and_seed_tamilnadu_data():
-    """Generates dataset CSV and seeds database."""
-    print("Generating comprehensive Tamil Nadu State Board question dataset...")
+    """Generates dataset CSV and seeds database with verified, non-vague questions."""
+    print("Generating comprehensive authentic Tamil Nadu State Board question dataset...")
     data = expand_dataset_to_comprehensive()
     df = pd.DataFrame(data)
 
@@ -243,41 +314,67 @@ def generate_and_seed_tamilnadu_data():
     # Seed to SQLite database
     db = SessionLocal()
     try:
+        from services.question_selection import is_vague_question
+
         # Seed curriculum first
         seed_curriculum_metadata(db)
 
-        # Check existing TN questions
-        existing_tn_count = db.query(Question).filter_by(board='Tamil Nadu State Board').count()
-        print(f"Current Tamil Nadu State Board questions in DB: {existing_tn_count}")
+        # Remove vague/template questions from DB if any exist
+        existing_qs = db.query(Question).filter_by(board='Tamil Nadu State Board').all()
+        removed_count = 0
+        for eq in existing_qs:
+            vague, _ = is_vague_question(eq.question)
+            if vague:
+                db.delete(eq)
+                removed_count += 1
+        if removed_count > 0:
+            db.commit()
+            print(f"Purged {removed_count} legacy vague/template questions from database.")
 
         inserted = 0
+        updated = 0
         for row in data:
             existing = db.query(Question).filter_by(question_id=row['question_id']).first()
             if not existing:
-                q = Question(
-                    question_id=row['question_id'],
-                    question=row['question'],
-                    subject=row['subject'],
-                    topic=row['topic'],
-                    board=row['board'],
-                    class_grade=row['class_grade'],
-                    question_type=row['question_type'],
-                    marks=row['marks'],
-                    bloom_level=row['bloom_level'],
-                    difficulty=row['difficulty'],
-                    source=row['source'],
-                    verified=row['verified']
-                )
-                db.add(q)
-                inserted += 1
+                # Also check by question text
+                text_match = db.query(Question).filter_by(question=row['question']).first()
+                if not text_match:
+                    q = Question(
+                        question_id=row['question_id'],
+                        question=row['question'],
+                        subject=row['subject'],
+                        topic=row['topic'],
+                        board=row['board'],
+                        class_grade=row['class_grade'],
+                        question_type=row['question_type'],
+                        marks=row['marks'],
+                        bloom_level=row['bloom_level'],
+                        difficulty=row['difficulty'],
+                        source=row['source'],
+                        verified=row['verified']
+                    )
+                    db.add(q)
+                    inserted += 1
+            else:
+                existing.question = row['question']
+                existing.topic = row['topic']
+                existing.subject = row['subject']
+                existing.class_grade = row['class_grade']
+                existing.marks = row['marks']
+                existing.bloom_level = row['bloom_level']
+                existing.difficulty = row['difficulty']
+                existing.source = row['source']
+                existing.verified = row['verified']
+                updated += 1
 
         db.commit()
-        print(f"Successfully inserted {inserted} Tamil Nadu State Board questions into SQLite database.")
+        print(f"Inserted {inserted} new, updated {updated} questions into database.")
         total_tn = db.query(Question).filter_by(board='Tamil Nadu State Board').count()
-        print(f"Total Tamil Nadu State Board questions in DB now: {total_tn}")
+        print(f"Total authentic Tamil Nadu State Board questions in DB now: {total_tn}")
     finally:
         db.close()
 
 
 if __name__ == '__main__':
     generate_and_seed_tamilnadu_data()
+

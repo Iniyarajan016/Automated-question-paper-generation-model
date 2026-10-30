@@ -7,12 +7,36 @@ load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 class Config:
     BASE_DIR = BASE_DIR
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'examforge-secure-dev-key-tn-2026')
+    # Production environment check
+    is_prod = (
+        os.environ.get('FLASK_ENV', '').lower() == 'production' or
+        os.environ.get('ENV', '').lower() == 'production' or
+        os.environ.get('RENDER', '').lower() == 'true'
+    )
+
+    env_secret = os.environ.get('SECRET_KEY')
+    if is_prod and (not env_secret or env_secret == 'examforge-secure-dev-key-tn-2026'):
+        import secrets, warnings
+        SECRET_KEY = secrets.token_hex(32)
+        warnings.warn(
+            "[SECURITY ALERT] Production deployment detected without a custom SECRET_KEY. "
+            "A secure cryptographically random ephemeral key was generated to avoid relying on "
+            "the default development secret. For persistent authentication sessions across server restarts, "
+            "please set the SECRET_KEY environment variable in your deployment dashboard.",
+            stacklevel=2
+        )
+    else:
+        SECRET_KEY = env_secret or 'examforge-secure-dev-key-tn-2026'
+
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', SECRET_KEY)
     
     # Database URL resolution
     raw_db_url = os.environ.get('DATABASE_URL')
     if raw_db_url:
+        # Normalize legacy postgres:// to postgresql:// for SQLAlchemy compatibility
+        if raw_db_url.startswith('postgres://'):
+            raw_db_url = raw_db_url.replace('postgres://', 'postgresql://', 1)
+
         if raw_db_url.startswith('sqlite:///') and not os.path.isabs(raw_db_url.replace('sqlite:///', '')):
             rel_path = raw_db_url.replace('sqlite:///', '')
             SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.normpath(os.path.join(BASE_DIR, rel_path))}'
@@ -24,11 +48,15 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # CORS Configuration
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip()
-        for origin in os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
-        if origin.strip()
-    ]
+    raw_cors = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173')
+    if raw_cors.strip() == '*':
+        CORS_ALLOWED_ORIGINS = '*'
+    else:
+        CORS_ALLOWED_ORIGINS = [
+            origin.strip()
+            for origin in raw_cors.split(',')
+            if origin.strip()
+        ]
     
     # Paths
     DATA_DIR = os.path.join(BASE_DIR, 'data')

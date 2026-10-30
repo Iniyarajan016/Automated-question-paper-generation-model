@@ -82,57 +82,88 @@ def _get_optional_auth_user(db):
     return None
 
 
+import threading
+from sqlalchemy.exc import IntegrityError
+
+_db_init_lock = threading.Lock()
+_db_initialized = False
+
 # --- Initialize database and default accounts on startup ---
 def setup_database():
-    """Create tables, run migrations, and seed default admin/teacher accounts."""
-    init_db()
-    db = SessionLocal()
-    try:
-        # 1. Seed Curriculum metadata
-        seed_curriculum_metadata(db)
+    """Create tables, run migrations, and seed default admin/teacher accounts safely."""
+    global _db_initialized
+    if _db_initialized:
+        return
 
-        # 2. Seed Administrator Account
-        admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL', 'admin@examforge.ai')
-        admin_pass = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'Admin@2026')
-        admin_user = db.query(User).filter_by(email=admin_email).first()
-        if not admin_user:
-            admin_user = User(
-                email=admin_email,
-                full_name='System Administrator',
-                password_hash=hash_password(admin_pass),
-                role='admin',
-                is_active=True
-            )
-            db.add(admin_user)
-            db.commit()
-            print(f"Created default administrator account: {admin_email}")
+    with _db_init_lock:
+        if _db_initialized:
+            return
 
-        # 3. Seed Teacher Account
-        teacher_email = os.environ.get('DEFAULT_TEACHER_EMAIL', 'teacher@examforge.ai')
-        teacher_pass = os.environ.get('DEFAULT_TEACHER_PASSWORD', 'ExamForge@2026')
-        teacher_user = db.query(User).filter_by(email=teacher_email).first()
-        if not teacher_user:
-            teacher_user = User(
-                email=teacher_email,
-                full_name='Lead Faculty / Examiner',
-                password_hash=hash_password(teacher_pass),
-                role='teacher',
-                subject_specialization='Science, Mathematics',
-                is_active=True
-            )
-            db.add(teacher_user)
-            db.commit()
-            print(f"Created default teacher account: {teacher_email}")
-        elif not teacher_user.subject_specialization:
-            teacher_user.subject_specialization = 'Science, Mathematics'
-            db.commit()
+        try:
+            init_db()
+            db = SessionLocal()
+            try:
+                # 1. Seed Curriculum metadata
+                seed_curriculum_metadata(db)
 
-        # 4. Check TN questions count
-        tn_count = db.query(Question).filter_by(board='Tamil Nadu State Board').count()
-        total_count = db.query(Question).count()
-        print(f"Database ready: {tn_count} Tamil Nadu State Board questions (Total questions in DB: {total_count}).")
-    finally:
-        db.close()
+                # 2. Seed Administrator Account
+                admin_email = os.environ.get('DEFAULT_ADMIN_EMAIL', 'admin@examforge.ai')
+                admin_pass = os.environ.get('DEFAULT_ADMIN_PASSWORD', 'Admin@2026')
+                admin_user = db.query(User).filter_by(email=admin_email).first()
+                if not admin_user:
+                    try:
+                        admin_user = User(
+                            email=admin_email,
+                            full_name='System Administrator',
+                            password_hash=hash_password(admin_pass),
+                            role='admin',
+                            is_active=True
+                        )
+                        db.add(admin_user)
+                        db.commit()
+                        print(f"Created default administrator account: {admin_email}")
+                    except IntegrityError:
+                        db.rollback()
+
+                # 3. Seed Teacher Account
+                teacher_email = os.environ.get('DEFAULT_TEACHER_EMAIL', 'teacher@examforge.ai')
+                teacher_pass = os.environ.get('DEFAULT_TEACHER_PASSWORD', 'ExamForge@2026')
+                teacher_user = db.query(User).filter_by(email=teacher_email).first()
+                if not teacher_user:
+                    try:
+                        teacher_user = User(
+                            email=teacher_email,
+                            full_name='Lead Faculty / Examiner',
+                            password_hash=hash_password(teacher_pass),
+                            role='teacher',
+                            subject_specialization='Science, Mathematics',
+                            is_active=True
+                        )
+                        db.add(teacher_user)
+                        db.commit()
+                        print(f"Created default teacher account: {teacher_email}")
+                    except IntegrityError:
+                        db.rollback()
+                elif not teacher_user.subject_specialization:
+                    try:
+                        teacher_user.subject_specialization = 'Science, Mathematics'
+                        db.commit()
+                    except IntegrityError:
+                        db.rollback()
+
+                # 4. Check TN questions count
+                tn_count = db.query(Question).filter_by(board='Tamil Nadu State Board').count()
+                total_count = db.query(Question).count()
+                print(f"Database ready: {tn_count} Tamil Nadu State Board questions (Total questions in DB: {total_count}).")
+                _db_initialized = True
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"Notice during database initialization: {e}")
+
+
+# Automatically run database initialization and seed checks on module load (supports Gunicorn & WSGI)
+setup_database()
 
 
 def get_db():

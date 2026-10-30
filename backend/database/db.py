@@ -7,6 +7,7 @@ import sys
 import sqlite3
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker, scoped_session, declarative_base
+from sqlalchemy.engine import make_url
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from config import Config
@@ -32,37 +33,63 @@ def safe_migrate_existing_tables():
     """
     Safely adds missing columns to existing SQLite tables without dropping data.
     """
-    db_path = os.path.join(Config.BASE_DIR, 'database', 'examforge.db')
+    try:
+        url = make_url(Config.SQLALCHEMY_DATABASE_URI)
+    except Exception as e:
+        print(f"Migration notice: unable to parse database URI: {e}")
+        return
+
+    # Skip this SQLite-specific migration when the database is not SQLite
+    if not url.drivername.startswith('sqlite'):
+        return
+
+    # Safely skip missing database path or in-memory databases (:memory: or empty)
+    db_file = url.database
+    if not db_file or db_file == ':memory:':
+        return
+
+    # Handle relative and absolute SQLite paths correctly
+    if os.path.isabs(db_file):
+        db_path = os.path.normpath(db_file)
+    else:
+        db_path = os.path.normpath(os.path.join(Config.BASE_DIR, db_file))
+
+    # Safely skip missing databases
     if not os.path.exists(db_path):
         return
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
 
-    # Column additions to check
-    column_checks = [
-        ('users', 'phone', 'TEXT'),
-        ('users', 'subject_specialization', 'TEXT'),
-        ('users', 'updated_at', 'DATETIME'),
-        ('questions', 'dataset_upload_id', 'INTEGER'),
-        ('questions', 'updated_at', 'DATETIME'),
-        ('generated_papers', 'duration_minutes', 'INTEGER DEFAULT 90'),
-        ('generated_papers', 'created_by_user_id', 'INTEGER'),
-        ('generated_papers', 'sections_json', 'JSON'),
-    ]
+        # Column additions to check
+        column_checks = [
+            ('users', 'phone', 'TEXT'),
+            ('users', 'subject_specialization', 'TEXT'),
+            ('users', 'updated_at', 'DATETIME'),
+            ('questions', 'dataset_upload_id', 'INTEGER'),
+            ('questions', 'updated_at', 'DATETIME'),
+            ('generated_papers', 'duration_minutes', 'INTEGER DEFAULT 90'),
+            ('generated_papers', 'created_by_user_id', 'INTEGER'),
+            ('generated_papers', 'sections_json', 'JSON'),
+        ]
 
-    for table, col_name, col_type in column_checks:
-        try:
-            cursor.execute(f"PRAGMA table_info({table});")
-            existing_cols = [c[1] for c in cursor.fetchall()]
-            if existing_cols and col_name not in existing_cols:
-                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};")
-                conn.commit()
-                print(f"Migrated {table}: added column {col_name}")
-        except Exception as e:
-            print(f"Migration notice for {table}.{col_name}: {e}")
-
-    conn.close()
+        for table, col_name, col_type in column_checks:
+            try:
+                cursor.execute(f"PRAGMA table_info({table});")
+                existing_cols = [c[1] for c in cursor.fetchall()]
+                if existing_cols and col_name not in existing_cols:
+                    cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type};")
+                    conn.commit()
+                    print(f"Migrated {table}: added column {col_name}")
+            except Exception as e:
+                print(f"Migration notice for {table}.{col_name}: {e}")
+    except Exception as e:
+        print(f"SQLite migration notice: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 
 def init_db():

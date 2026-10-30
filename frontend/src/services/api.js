@@ -1,7 +1,10 @@
-const API_BASE =
+const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  'http://localhost:5000/api';
+  (import.meta.env.PROD
+    ? 'https://examforge-backend-cx6p.onrender.com/api'
+    : 'http://localhost:5000/api')
+).replace(/\/+$/, '');
 
 const TOKEN_KEY = 'examforge_token';
 const USER_KEY = 'examforge_user';
@@ -376,7 +379,7 @@ export const api = {
       try {
         const err = await res.json();
         msg = err.error || err.message || msg;
-      } catch {}
+      } catch { }
       throw new Error(msg);
     }
     const blob = await res.blob();

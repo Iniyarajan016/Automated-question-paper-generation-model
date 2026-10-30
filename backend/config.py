@@ -33,9 +33,11 @@ class Config:
     # Database URL resolution
     raw_db_url = os.environ.get('DATABASE_URL')
     if raw_db_url:
-        # Normalize legacy postgres:// to postgresql:// for SQLAlchemy compatibility
+        # Normalize postgres:// and postgresql:// to postgresql+psycopg:// for psycopg v3 compatibility
         if raw_db_url.startswith('postgres://'):
-            raw_db_url = raw_db_url.replace('postgres://', 'postgresql://', 1)
+            raw_db_url = 'postgresql+psycopg://' + raw_db_url[len('postgres://'):]
+        elif raw_db_url.startswith('postgresql://'):
+            raw_db_url = 'postgresql+psycopg://' + raw_db_url[len('postgresql://'):]
 
         if raw_db_url.startswith('sqlite:///') and not os.path.isabs(raw_db_url.replace('sqlite:///', '')):
             rel_path = raw_db_url.replace('sqlite:///', '')

@@ -15,7 +15,12 @@ from config import Config
 # Ensure database directory exists
 os.makedirs(os.path.join(Config.BASE_DIR, 'database'), exist_ok=True)
 
-engine = create_engine(Config.SQLALCHEMY_DATABASE_URI, echo=False)
+engine = create_engine(
+    Config.SQLALCHEMY_DATABASE_URI,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    echo=False
+)
 SessionLocal = scoped_session(sessionmaker(bind=engine))
 Base = declarative_base()
 
